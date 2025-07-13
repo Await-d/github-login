@@ -61,5 +61,6 @@ temp/
 ehthumbs.db
 Thumbs.db
 
-# 测试文件
+# 敏感测试文件 - 防止真实数据泄露
 test-system.js
+*.test.local.js

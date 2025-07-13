@@ -16,6 +16,8 @@ steps:
       - docker rm github-manager || true
       - echo "开始诊断和创建必要目录..."
       - ls -la /volume1 || echo "/volume1 目录不存在或无法访问"
+      - mkdir -p /volume1/docker/1panel/apps/local/github_manager
+      - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager
       - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "无法创建data目录"
       - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "无法创建config目录"
       - ls -la /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "data目录不存在"

@@ -71,7 +71,8 @@ npm start
 系统支持以下格式的账号信息:
 ```
 账号----密码----密钥----日期
-htrafmarryond----MvGaoPTg6xVbWR----E4GKGXAPVRYD6T4O----2025-07-08
+demo_user_001----P@ssw0rd123----ABCD1234EFGH5678----2025-01-15
+example_account----SecretPass456----WXYZ9876QRST4321----2025-02-20
 ```
 
 ## 🔧 API接口
