@@ -2,17 +2,17 @@ version: '3.8'
 
 services:
   github-manager:
-    build: 
+    build:
       context: .
-      dockerfile: Dockerfile
-    container_name: github-login-manager
+      dockerfile: Dockerfile.simple
+    container_name: github-login-manager-simple
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - SESSION_SECRET=github-manager-secret-change-in-production
-      - ENCRYPTION_KEY=your-encryption-key-change-in-production
+      - SESSION_SECRET=${SESSION_SECRET:-github-manager-secret-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-encryption-key-change-in-production}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

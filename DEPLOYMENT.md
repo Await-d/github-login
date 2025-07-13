@@ -4,53 +4,52 @@
 
 ### 问题修复说明
 
-原始Dockerfile有以下问题：
+原始Dockerfile遇到的问题：
 1. ❌ 缺少 `package-lock.json` 文件
 2. ❌ 使用过时的 `npm ci --only=production` 参数
+3. ❌ TypeScript编译器(tsc)在生产依赖中不存在
 
 ### 修复内容
 1. ✅ 添加 `package-lock.json` 到版本控制
-2. ✅ 更新为 `npm ci --omit=dev` 命令
-3. ✅ 创建优化版多阶段构建Dockerfile
+2. ✅ 修复构建流程：先安装完整依赖→构建→清理开发依赖
+3. ✅ 创建多种Dockerfile选项适应不同需求
 
 ## 🚀 快速部署
 
-### 方式1: 基础部署
+### 方式1: 简化版部署 (推荐新手)
 ```bash
-# 构建镜像
+# 使用简化Dockerfile构建
+docker build -f Dockerfile.simple -t github-manager:simple .
+
+# 或使用docker-compose
+docker-compose -f docker-compose.simple.yml up -d
+```
+
+### 方式2: 标准部署
+```bash
+# 使用修复后的标准Dockerfile
 docker build -t github-manager .
 
-# 运行容器
-docker run -d \
-  --name github-manager \
-  -p 3000:3000 \
-  -v $(pwd)/data:/app/data \
-  github-manager
-```
-
-### 方式2: Docker Compose (推荐)
-```bash
-# 开发环境
+# 或使用docker-compose
 docker-compose up -d
-
-# 生产环境
-docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### 方式3: 优化版构建
+### 方式3: 生产环境优化版
 ```bash
 # 使用多阶段构建减小镜像体积
 docker build -f Dockerfile.optimized -t github-manager:optimized .
 
-# 运行优化版
-docker run -d \
-  --name github-manager \
-  -p 3000:3000 \
-  -e SESSION_SECRET="your-secret-key" \
-  -e ENCRYPTION_KEY="your-32-char-key" \
-  -v github-data:/app/data \
-  github-manager:optimized
+# 生产环境docker-compose
+docker-compose -f docker-compose.prod.yml up -d
 ```
+
+### 可用的Dockerfile版本
+
+| 文件 | 特点 | 适用场景 |
+|------|------|----------|
+| `Dockerfile.simple` | 简单直接，使用npm install | 开发测试 |
+| `Dockerfile` | 标准版，npm ci + 依赖清理 | 一般部署 |
+| `Dockerfile.optimized` | 多阶段构建，最小镜像体积 | 生产环境 |
 
 ## 📋 环境变量配置
 
