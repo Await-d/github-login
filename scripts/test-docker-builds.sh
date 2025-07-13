@@ -17,8 +17,8 @@ echo ""
 
 # 测试所有Dockerfile版本
 DOCKERFILES=(
-    "Dockerfile.simple:简化版"
     "Dockerfile:标准版" 
+    "Dockerfile.root:Root权限版(推荐)"
     "Dockerfile.optimized:优化版"
 )
 
@@ -54,9 +54,9 @@ if [ $SUCCESS_COUNT -eq $TOTAL_COUNT ]; then
     echo "✅ 所有Docker配置构建成功！"
     echo ""
     echo "🚀 推荐使用方式："
-    echo "   开发测试: docker build -f Dockerfile.simple -t github-manager ."
+    echo "   快速部署: docker-compose -f docker-compose.root.yml up -d"
     echo "   生产环境: docker build -f Dockerfile.optimized -t github-manager ."
-    echo "   快速部署: docker-compose -f docker-compose.simple.yml up -d"
+    echo "   标准部署: docker-compose up -d"
 else
     echo "⚠️  部分Docker配置构建失败，请检查错误信息"
 fi

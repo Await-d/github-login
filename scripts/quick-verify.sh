@@ -48,14 +48,14 @@ npm test
 echo ""
 echo "5️⃣ Docker配置验证..."
 echo "可用的Docker构建命令："
-echo "📦 简化版: docker build -f Dockerfile.simple -t github-manager:simple ."
 echo "📦 标准版: docker build -f Dockerfile -t github-manager ."  
+echo "📦 Root版: docker build -f Dockerfile.root -t github-manager:root ."
 echo "📦 优化版: docker build -f Dockerfile.optimized -t github-manager:optimized ."
 
 echo ""
 echo "6️⃣ 部署建议..."
-echo "🚀 开发环境: docker-compose -f docker-compose.simple.yml up -d"
-echo "🚀 生产环境: docker-compose -f docker-compose.prod.yml up -d"
+echo "🚀 快速部署: docker-compose -f docker-compose.root.yml up -d"
+echo "🚀 标准部署: docker-compose up -d"
 
 echo ""
 echo "✅ 验证完成！项目已准备就绪。"

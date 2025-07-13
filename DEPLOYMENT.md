@@ -16,21 +16,16 @@
 
 ## 🚀 快速部署
 
-### 方式1: 简化版部署 (推荐新手)
+### 方式1: 快速部署 (推荐)
 ```bash
-# 使用简化Dockerfile构建
-docker build -f Dockerfile.simple -t github-manager:simple .
-
-# 或使用docker-compose
-docker-compose -f docker-compose.simple.yml up -d
+# 使用Root权限版本解决权限问题
+docker-compose -f docker-compose.root.yml up -d
 ```
 
 ### 方式2: 标准部署
 ```bash
-# 使用修复后的标准Dockerfile
-docker build -t github-manager .
-
-# 或使用docker-compose
+# 修复数据目录权限后使用标准版
+mkdir -p ./data && chmod 777 ./data
 docker-compose up -d
 ```
 
@@ -38,18 +33,29 @@ docker-compose up -d
 ```bash
 # 使用多阶段构建减小镜像体积
 docker build -f Dockerfile.optimized -t github-manager:optimized .
-
-# 生产环境docker-compose
-docker-compose -f docker-compose.prod.yml up -d
+docker run -d -p 3000:3000 -v github-data:/app/data github-manager:optimized
 ```
 
 ### 可用的Dockerfile版本
 
-| 文件 | 特点 | 适用场景 |
-|------|------|----------|
-| `Dockerfile.simple` | 简单直接，使用npm install | 开发测试 |
-| `Dockerfile` | 标准版，npm ci + 依赖清理 | 一般部署 |
-| `Dockerfile.optimized` | 多阶段构建，最小镜像体积 | 生产环境 |
+| 文件 | 特点 | 适用场景 | 权限 |
+|------|------|----------|------|
+| `Dockerfile` | 标准版，npm ci + 依赖清理 | 一般部署 | 非root |
+| `Dockerfile.root` | **Root用户版，解决权限问题** | **快速部署** | **Root** |
+| `Dockerfile.optimized` | 多阶段构建，最小镜像体积 | 生产环境 | 非root |
+
+### 🚨 权限问题快速解决方案
+
+如果遇到数据库权限错误 `SQLITE_CANTOPEN`，推荐使用root版本：
+
+```bash
+# 使用root用户版本(推荐解决权限问题)
+docker-compose -f docker-compose.root.yml up -d
+
+# 或手动构建
+docker build -f Dockerfile.root -t github-manager:root .
+docker run -d -p 3000:3000 -v github-data:/app/data github-manager:root
+```
 
 ## 📋 环境变量配置
 
