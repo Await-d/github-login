@@ -1,0 +1,64 @@
+# GitHub账号管理系统 优化版Docker配置
+# 多阶段构建，减小镜像体积
+
+# 构建阶段
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package*.json ./
+
+# 安装所有依赖（包括devDependencies）
+RUN npm ci
+
+# 复制源代码
+COPY . .
+
+# 构建TypeScript项目
+RUN npm run build
+
+# 生产阶段
+FROM node:18-alpine AS production
+
+WORKDIR /app
+
+# 安装必要的系统工具
+RUN apk add --no-cache curl
+
+# 复制依赖文件
+COPY package*.json ./
+
+# 仅安装生产依赖
+RUN npm ci --omit=dev && npm cache clean --force
+
+# 从构建阶段复制构建产物
+COPY --from=builder /app/dist ./dist
+
+# 复制静态文件
+COPY public ./public
+
+# 创建数据目录
+RUN mkdir -p /app/data
+
+# 设置环境变量
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# 暴露端口
+EXPOSE 3000
+
+# 创建非root用户
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# 设置权限
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/api/health || exit 1
+
+# 启动应用
+CMD ["node", "dist/server.js"]
