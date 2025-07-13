@@ -17,8 +17,8 @@ coverage/
 # nyc test coverage
 .nyc_output
 
-# 依赖锁定文件
-package-lock.json
+# 依赖锁定文件 (保留package-lock.json用于Docker构建)
+# package-lock.json
 
 # 环境变量
 .env
