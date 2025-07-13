@@ -32,17 +32,60 @@ export class Database {
   }
 
   /**
-   * 确保数据目录存在
+   * 确保数据目录存在并具有正确权限
    */
   private ensureDataDirectory(): void {
     const dataDir = path.dirname(this.dbPath);
+    
+    console.log('🔍 检查数据目录:', dataDir);
+    console.log('🔍 数据库文件路径:', this.dbPath);
+    
     try {
+      // 检查数据目录是否存在
       if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
         console.log('📁 创建数据目录:', dataDir);
+        fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
       }
+      
+      // 检查目录权限
+      try {
+        fs.accessSync(dataDir, fs.constants.W_OK | fs.constants.R_OK);
+        console.log('✅ 数据目录权限检查通过');
+      } catch (accessError) {
+        console.error('❌ 数据目录权限不足:', accessError);
+        console.log('当前用户UID/GID:', process.getuid?.(), process.getgid?.());
+        console.log('尝试修复权限...');
+        
+        // 尝试创建测试文件检查写权限
+        const testFile = path.join(dataDir, '.test-write');
+        try {
+          fs.writeFileSync(testFile, 'test');
+          fs.unlinkSync(testFile);
+          console.log('✅ 写权限测试通过');
+        } catch (writeError) {
+          console.error('❌ 写权限测试失败:', writeError);
+          throw new Error(`数据目录权限不足: ${dataDir}`);
+        }
+      }
+      
+      // 检查数据库文件权限（如果存在）
+      if (fs.existsSync(this.dbPath)) {
+        try {
+          fs.accessSync(this.dbPath, fs.constants.W_OK | fs.constants.R_OK);
+          console.log('✅ 数据库文件权限检查通过');
+        } catch (dbAccessError) {
+          console.error('❌ 数据库文件权限不足:', dbAccessError);
+          throw new Error(`数据库文件权限不足: ${this.dbPath}`);
+        }
+      }
+      
     } catch (error) {
-      console.error('创建数据目录失败:', error);
+      console.error('数据目录初始化失败:', error);
+      console.log('环境信息:');
+      console.log('- NODE_ENV:', process.env.NODE_ENV);
+      console.log('- DATABASE_DIR:', process.env.DATABASE_DIR);
+      console.log('- 工作目录:', process.cwd());
+      console.log('- 用户权限:', { uid: process.getuid?.(), gid: process.getgid?.() });
       throw error;
     }
   }

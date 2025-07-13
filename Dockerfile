@@ -16,6 +16,10 @@ COPY . .
 # 构建TypeScript
 RUN npm run build
 
+# 复制并设置启动脚本权限
+COPY scripts/docker-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # 清理开发依赖以减小镜像体积
 RUN npm prune --omit=dev
 
@@ -23,6 +27,7 @@ RUN npm prune --omit=dev
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     mkdir -p /app/data && \
+    chmod 755 /app/data && \
     chown -R nodejs:nodejs /app
 
 # 设置环境变量
@@ -40,5 +45,6 @@ USER nodejs
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# 启动应用
+# 设置启动脚本为入口点
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["npm", "start"]

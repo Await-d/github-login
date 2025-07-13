@@ -28,7 +28,7 @@ steps:
           echo "所有必要目录已存在，启动容器..."
           docker run -d \
             --name github-manager \
-            -p 3000:3000 \
+            -p 10202:3000 \
             -e TZ="Asia/Shanghai" \
             -e NODE_ENV=production \
             -e PUID=0 \

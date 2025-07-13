@@ -23,6 +23,7 @@ RUN npm run build
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     mkdir -p /app/data && \
+    chmod 755 /app/data && \
     chown -R nodejs:nodejs /app
 
 # 设置环境变量
