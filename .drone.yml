@@ -1,0 +1,53 @@
+kind: pipeline
+type: docker
+name: github-manager-deploy
+
+steps:
+  - name: deploy
+    image: docker:dind
+    volumes:
+      - name: dockersock
+        path: /var/run/docker.sock
+      - name: volume1
+        path: /volume1
+    commands:
+      - docker build -t github-manager:latest .
+      - docker stop github-manager || true
+      - docker rm github-manager || true
+      - echo "开始诊断和创建必要目录..."
+      - ls -la /volume1 || echo "/volume1 目录不存在或无法访问"
+      - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "无法创建data目录"
+      - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "无法创建config目录"
+      - ls -la /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "data目录不存在"
+      - ls -la /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "config目录不存在"
+      - |
+        if [ -d "/volume1/docker/1panel/apps/local/github_manager/localmanager/data" ] && 
+           [ -d "/volume1/docker/1panel/apps/local/github_manager/localmanager/config" ]; then
+          echo "所有必要目录已存在，启动容器..."
+          docker run -d \
+            --name github-manager \
+            -p 3000:3000 \
+            -e TZ="Asia/Shanghai" \
+            -e NODE_ENV=production \
+            -e PUID=0 \
+            -e PGID=0 \
+            -e UMASK=000 \
+            -e SESSION_SECRET="github-manager-production-secret-$(date +%s)" \
+            -e ENCRYPTION_KEY="github-encryption-key-$(date +%s)" \
+            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/data:/app/data \
+            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/config:/app/config \
+            --restart unless-stopped \
+            --network 1panel-network \
+            github-manager:latest
+        else
+          echo "错误：一个或多个必要目录不存在，无法启动容器"
+          exit 1
+        fi
+
+volumes:
+  - name: dockersock
+    host:
+      path: /var/run/docker.sock 
+  - name: volume1
+    host:
+      path: /volume1

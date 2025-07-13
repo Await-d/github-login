@@ -1,0 +1,27 @@
+# 忽略文件
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.nyc_output
+coverage
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 开发文件
+*.md
+.vscode
+.idea
+test-system.js
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+
+# 构建文件（会重新构建）
+dist
