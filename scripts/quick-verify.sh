@@ -9,7 +9,7 @@ echo "1️⃣ 检查项目结构..."
 REQUIRED_FILES=(
     "package.json"
     "Dockerfile"
-    "Dockerfile.simple" 
+    "Dockerfile.root" 
     "Dockerfile.optimized"
     "docker-compose.yml"
     "src/server.ts"
