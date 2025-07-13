@@ -20,6 +20,8 @@ steps:
       - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager
       - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "无法创建data目录"
       - mkdir -p /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "无法创建config目录"
+      - chmod 777 /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "无法修改data目录权限"
+      - chmod 777 /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "无法修改config目录权限"
       - ls -la /volume1/docker/1panel/apps/local/github_manager/localmanager/data || echo "data目录不存在"
       - ls -la /volume1/docker/1panel/apps/local/github_manager/localmanager/config || echo "config目录不存在"
       - |

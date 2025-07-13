@@ -8,15 +8,11 @@ import { IUser, IGitHubAccount } from '../types';
  */
 export class Database {
   private db: sqlite3.Database;
-  private dbPath: string;
+  private dbPath: string = '';
 
   constructor() {
-    // 支持环境变量配置数据库路径
-    const dataDir = process.env.DATABASE_DIR || path.join(__dirname, '../../data');
-    this.dbPath = path.join(dataDir, 'github-manager.db');
-    
-    // 确保数据目录存在
-    this.ensureDataDirectory();
+    // 支持环境变量配置数据库路径，带回退机制
+    this.initializeDatabasePath();
     
     this.db = new sqlite3.Database(this.dbPath, (err) => {
       if (err) {
@@ -29,6 +25,36 @@ export class Database {
     });
     
     this.initTables();
+  }
+
+  /**
+   * 初始化数据库路径，带权限检查和回退机制
+   */
+  private initializeDatabasePath(): void {
+    const preferredDataDir = process.env.DATABASE_DIR || path.join(__dirname, '../../data');
+    const fallbackDataDir = '/tmp/github-manager-data';
+    
+    // 首先尝试使用首选路径
+    try {
+      this.dbPath = path.join(preferredDataDir, 'github-manager.db');
+      this.ensureDataDirectory();
+      console.log('✅ 使用首选数据目录:', preferredDataDir);
+      return;
+    } catch (error: any) {
+      console.warn('⚠️  首选数据目录不可用:', preferredDataDir);
+      console.warn('错误:', error.message);
+    }
+    
+    // 回退到临时目录
+    try {
+      this.dbPath = path.join(fallbackDataDir, 'github-manager.db');
+      this.ensureDataDirectory();
+      console.log('✅ 使用回退数据目录:', fallbackDataDir);
+      console.log('⚠️  注意: 数据将存储在临时目录，容器重启后可能丢失');
+    } catch (error: any) {
+      console.error('❌ 所有数据目录都不可用');
+      throw new Error('无法创建数据库目录: ' + error.message);
+    }
   }
 
   /**
