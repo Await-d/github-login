@@ -19,22 +19,21 @@ RUN npm run build
 # 清理开发依赖以减小镜像体积
 RUN npm prune --omit=dev
 
-# 创建数据目录
-RUN mkdir -p /app/data
+# 创建非root用户和数据目录
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    mkdir -p /app/data && \
+    chown -R nodejs:nodejs /app
 
 # 设置环境变量
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DATABASE_DIR=/app/data
 
 # 暴露端口
 EXPOSE 3000
 
-# 创建非root用户
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# 设置权限
-RUN chown -R nodejs:nodejs /app
+# 切换到非root用户
 USER nodejs
 
 # 健康检查

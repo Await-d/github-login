@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { IUser, IGitHubAccount } from '../types';
 
 /**
@@ -10,9 +11,40 @@ export class Database {
   private dbPath: string;
 
   constructor() {
-    this.dbPath = path.join(__dirname, '../../data/github-manager.db');
-    this.db = new sqlite3.Database(this.dbPath);
+    // 支持环境变量配置数据库路径
+    const dataDir = process.env.DATABASE_DIR || path.join(__dirname, '../../data');
+    this.dbPath = path.join(dataDir, 'github-manager.db');
+    
+    // 确保数据目录存在
+    this.ensureDataDirectory();
+    
+    this.db = new sqlite3.Database(this.dbPath, (err) => {
+      if (err) {
+        console.error('数据库连接失败:', err.message);
+        console.error('数据库路径:', this.dbPath);
+        throw err;
+      } else {
+        console.log('✅ 数据库连接成功:', this.dbPath);
+      }
+    });
+    
     this.initTables();
+  }
+
+  /**
+   * 确保数据目录存在
+   */
+  private ensureDataDirectory(): void {
+    const dataDir = path.dirname(this.dbPath);
+    try {
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+        console.log('📁 创建数据目录:', dataDir);
+      }
+    } catch (error) {
+      console.error('创建数据目录失败:', error);
+      throw error;
+    }
   }
 
   /**
