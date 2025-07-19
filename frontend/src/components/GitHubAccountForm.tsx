@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, DatePicker, message } from 'antd';
-import dayjs, { Dayjs } from 'dayjs';
+import { Modal, Form, Input, DatePicker } from 'antd';
+import dayjs from 'dayjs';
 
 interface GitHubAccount {
   id?: number;

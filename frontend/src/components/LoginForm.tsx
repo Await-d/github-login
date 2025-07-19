@@ -18,11 +18,11 @@ const LoginForm: React.FC<Props> = ({ onLoginSuccess }) => {
     setLoading(true);
     try {
       const result = await login(values.username, values.password);
-      if (result.success) {
+      if (result?.success) {
         message.success('登录成功');
         onLoginSuccess();
       } else {
-        message.error(result.message);
+        message.error(result?.message || '登录失败');
       }
     } finally {
       setLoading(false);
@@ -38,10 +38,10 @@ const LoginForm: React.FC<Props> = ({ onLoginSuccess }) => {
     setLoading(true);
     try {
       const result = await register(values.username, values.password);
-      if (result.success) {
+      if (result?.success) {
         message.success('注册成功，请登录');
       } else {
-        message.error(result.message);
+        message.error(result?.message || '注册失败');
       }
     } finally {
       setLoading(false);
