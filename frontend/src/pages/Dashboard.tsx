@@ -136,8 +136,43 @@ const Dashboard: React.FC = () => {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    message.success('已复制到剪贴板');
+    // 兼容不同浏览器的复制方法
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success('已复制到剪贴板');
+      }).catch(() => {
+        fallbackCopyTextToClipboard(text);
+      });
+    } else {
+      fallbackCopyTextToClipboard(text);
+    }
+  };
+
+  const fallbackCopyTextToClipboard = (text: string) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    
+    // 避免滚动到底部
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        message.success('已复制到剪贴板');
+      } else {
+        message.error('复制失败，请手动复制');
+      }
+    } catch (err) {
+      message.error('复制失败，请手动复制');
+    }
+
+    document.body.removeChild(textArea);
   };
 
   const formatTOTPToken = (token: string) => {
