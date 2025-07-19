@@ -10,7 +10,10 @@ from datetime import datetime
 import os
 
 # 数据库配置
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./github_manager.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/github_manager.db")
+#判断DATABASE_URL是否以sqlite://开头，如果不是，则代表是文件路径，需要拼接data目录
+if not DATABASE_URL.startswith("sqlite://"):
+    DATABASE_URL = "sqlite:///" + DATABASE_URL + "/github_manager.db"
 
 # 创建数据库引擎
 engine = create_engine(
