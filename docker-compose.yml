@@ -9,7 +9,7 @@ services:
     environment:
       - PORT=8000
       - DATABASE_URL=sqlite:///./data/github_manager.db
-      - ENCRYPTION_KEY=github_manager_key_32_bytes!!
+      - ENCRYPTION_KEY=Z2l0aHViX21hbmFnZXJfc2VjcmV0X2tleV8zMmJ5dGU=
     volumes:
       - ./data:/app/data
     restart: unless-stopped
