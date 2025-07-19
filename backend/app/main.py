@@ -5,6 +5,7 @@ GitHub账号管理系统 - FastAPI后端
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -67,9 +68,47 @@ async def health_check():
     }
 
 # 挂载静态文件 (React构建产物)
-frontend_build = os.path.join(os.path.dirname(backend_dir), "frontend", "build")
-if os.path.exists(frontend_build):
-    app.mount("/", StaticFiles(directory=frontend_build, html=True), name="frontend")
+# 在Docker容器中，前端构建文件位于 /app/frontend/build
+frontend_paths = [
+    "/app/frontend/build",  # Docker容器路径
+    os.path.join(os.path.dirname(backend_dir), "frontend", "build"),  # 本地开发路径
+]
+
+frontend_dir = None
+for frontend_build in frontend_paths:
+    if os.path.exists(frontend_build):
+        print(f"✅ 找到前端构建文件: {frontend_build}")
+        frontend_dir = frontend_build
+        break
+else:
+    print("⚠️  未找到前端构建文件，将只提供API服务")
+
+# 如果找到前端文件，添加静态文件服务
+if frontend_dir:
+    # 提供静态资源
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_dir, "static")), name="static")
+    
+    # 提供前端主页
+    @app.get("/")
+    async def serve_frontend():
+        """提供前端主页"""
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
+    
+    # 捕获所有前端路由，返回index.html（支持React Router）
+    @app.get("/{path:path}")
+    async def serve_frontend_routes(path: str):
+        """处理前端路由，返回index.html"""
+        # 如果请求的是API路径，不处理
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        # 检查是否存在对应的静态文件
+        file_path = os.path.join(frontend_dir, path)
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        
+        # 否则返回index.html，让React Router处理
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
