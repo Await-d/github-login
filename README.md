@@ -97,13 +97,34 @@ docker-compose logs -f
 docker-compose down
 ```
 
-应用将在 http://localhost:8000 运行，包含前后端。
+应用将在 http://localhost:10202 运行，包含前后端。
+
+## 🔑 默认账号
+
+首次启动时系统会自动创建默认管理员账号：
+
+- **用户名**: `admin`
+- **密码**: `admin123`
+
+⚠️ **安全提醒**: 首次登录后请立即修改默认密码！
+
+### 环境变量配置
+
+可以通过以下环境变量自定义默认账号：
+
+```bash
+CREATE_DEFAULT_ADMIN=true          # 是否创建默认账号
+DEFAULT_ADMIN_USERNAME=admin       # 默认用户名
+DEFAULT_ADMIN_PASSWORD=admin123    # 默认密码
+```
+
+生产环境建议设置 `CREATE_DEFAULT_ADMIN=false` 并手动创建管理员账号。
 
 ## 📋 API文档
 
 启动后端服务后，访问：
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:10202/docs
+- **ReDoc**: http://localhost:10202/redoc
 
 ### 主要接口
 

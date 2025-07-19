@@ -10,6 +10,9 @@ services:
       - PORT=3000
       - DATABASE_URL=sqlite:///./data/github_manager.db
       - ENCRYPTION_KEY=Z2l0aHViX21hbmFnZXJfc2VjcmV0X2tleV8zMmJ5dGU=
+      - CREATE_DEFAULT_ADMIN=true
+      - DEFAULT_ADMIN_USERNAME=admin
+      - DEFAULT_ADMIN_PASSWORD=admin123
     volumes:
       - ./data:/app/data
     restart: unless-stopped

@@ -63,6 +63,47 @@ def get_db():
         db.close()
 
 
+def create_default_admin():
+    """创建默认管理员账号"""
+    # 检查是否应该创建默认账号
+    create_default = os.getenv("CREATE_DEFAULT_ADMIN", "true").lower() == "true"
+    if not create_default:
+        return
+    
+    db = SessionLocal()
+    try:
+        # 检查是否已有用户
+        existing_users = db.query(User).count()
+        if existing_users > 0:
+            return
+        
+        # 导入加密工具
+        from utils.encryption import hash_password
+        
+        # 创建默认管理员账号
+        default_username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+        default_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
+        
+        hashed_password = hash_password(default_password)
+        admin_user = User(
+            username=default_username,
+            hashed_password=hashed_password
+        )
+        
+        db.add(admin_user)
+        db.commit()
+        
+        print(f"✅ 创建默认管理员账号: {default_username}")
+        print(f"   密码: {default_password}")
+        print("   ⚠️  首次登录后请及时修改密码!")
+        
+    except Exception as e:
+        print(f"❌ 创建默认管理员账号失败: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def init_db():
     """初始化数据库"""
     global DATABASE_URL, engine, SessionLocal
@@ -71,6 +112,10 @@ def init_db():
         # 创建所有表
         Base.metadata.create_all(bind=engine)
         print("✅ 数据库表创建成功")
+        
+        # 创建默认管理员账号
+        create_default_admin()
+        
     except Exception as e:
         print(f"❌ 数据库初始化失败: {e}")
         # 创建fallback数据库目录
@@ -81,3 +126,6 @@ def init_db():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         Base.metadata.create_all(bind=engine)
         print("✅ 使用fallback数据库路径创建成功")
+        
+        # 在fallback情况下也创建默认管理员账号
+        create_default_admin()
