@@ -56,10 +56,56 @@ const Dashboard: React.FC = () => {
   const [totpModalVisible, setTotpModalVisible] = useState(false);
   const [totpData, setTotpData] = useState<TOTPItem[]>([]);
   const [totpLoading, setTotpLoading] = useState(false);
+  const [countdown, setCountdown] = useState<{[key: number]: number}>({});
 
   useEffect(() => {
     loadAccounts();
   }, []);
+
+  // TOTP倒计时定时器
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (totpModalVisible && totpData.length > 0) {
+      // 初始化倒计时
+      const initialCountdown: {[key: number]: number} = {};
+      totpData.forEach(item => {
+        initialCountdown[item.id] = item.time_remaining;
+      });
+      setCountdown(initialCountdown);
+      
+      // 每秒更新倒计时
+      interval = setInterval(() => {
+        setCountdown(prev => {
+          const newCountdown = { ...prev };
+          let shouldRefresh = false;
+          
+          Object.keys(newCountdown).forEach(key => {
+            const id = parseInt(key);
+            if (newCountdown[id] > 0) {
+              newCountdown[id] -= 1;
+            } else {
+              // 倒计时结束，需要刷新TOTP
+              shouldRefresh = true;
+            }
+          });
+          
+          // 如果有任何倒计时到达0，刷新TOTP数据
+          if (shouldRefresh) {
+            showTOTPBatch();
+          }
+          
+          return newCountdown;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [totpModalVisible, totpData]);
 
   const loadAccounts = async () => {
     setLoading(true);
@@ -127,12 +173,24 @@ const Dashboard: React.FC = () => {
       const response = await githubAPI.getAllTOTP();
       if (response.data.success) {
         setTotpData(response.data.accounts);
+        // 重置倒计时
+        const newCountdown: {[key: number]: number} = {};
+        response.data.accounts.forEach((item: TOTPItem) => {
+          newCountdown[item.id] = item.time_remaining;
+        });
+        setCountdown(newCountdown);
       }
     } catch (error) {
       message.error('获取TOTP验证码失败');
     } finally {
       setTotpLoading(false);
     }
+  };
+
+  const closeTOTPModal = () => {
+    setTotpModalVisible(false);
+    setCountdown({});
+    setTotpData([]);
   };
 
   const copyToClipboard = (text: string) => {
@@ -265,18 +323,21 @@ const Dashboard: React.FC = () => {
       title: '剩余时间',
       dataIndex: 'time_remaining',
       key: 'time_remaining',
-      render: (time: number) => (
-        <Space>
-          <Progress
-            type="circle"
-            size={40}
-            percent={(time / 30) * 100}
-            showInfo={false}
-            strokeColor={time <= 10 ? '#ff4d4f' : '#52c41a'}
-          />
-          <Text>{time}秒</Text>
-        </Space>
-      )
+      render: (time: number, record: TOTPItem) => {
+        const currentTime = countdown[record.id] !== undefined ? countdown[record.id] : time;
+        return (
+          <Space>
+            <Progress
+              type="circle"
+              size={40}
+              percent={(currentTime / 30) * 100}
+              showInfo={false}
+              strokeColor={currentTime <= 10 ? '#ff4d4f' : '#52c41a'}
+            />
+            <Text>{currentTime}秒</Text>
+          </Space>
+        );
+      }
     }
   ];
 
@@ -389,12 +450,12 @@ const Dashboard: React.FC = () => {
         <Modal
           title="TOTP验证码"
           open={totpModalVisible}
-          onCancel={() => setTotpModalVisible(false)}
+          onCancel={closeTOTPModal}
           footer={[
             <Button key="refresh" icon={<ReloadOutlined />} onClick={showTOTPBatch} loading={totpLoading}>
               刷新
             </Button>,
-            <Button key="close" onClick={() => setTotpModalVisible(false)}>
+            <Button key="close" onClick={closeTOTPModal}>
               关闭
             </Button>
           ]}
