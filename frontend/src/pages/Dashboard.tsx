@@ -12,7 +12,10 @@ import {
   Row,
   Col,
   Statistic,
-  Progress
+  Progress,
+  Input,
+  DatePicker,
+  Select
 } from 'antd';
 import {
   PlusOutlined,
@@ -22,14 +25,21 @@ import {
   LogoutOutlined,
   ReloadOutlined,
   KeyOutlined,
-  CopyOutlined
+  CopyOutlined,
+  ImportOutlined,
+  SearchOutlined,
+  FilterOutlined
 } from '@ant-design/icons';
 import { githubAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import GitHubAccountForm from '../components/GitHubAccountForm';
+import BatchImportModal from '../components/BatchImportModal';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
+const { Search } = Input;
+const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 interface GitHubAccount {
   id: number;
@@ -50,6 +60,7 @@ interface TOTPItem {
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [accounts, setAccounts] = useState<GitHubAccount[]>([]);
+  const [filteredAccounts, setFilteredAccounts] = useState<GitHubAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<GitHubAccount | undefined>();
@@ -57,6 +68,12 @@ const Dashboard: React.FC = () => {
   const [totpData, setTotpData] = useState<TOTPItem[]>([]);
   const [totpLoading, setTotpLoading] = useState(false);
   const [countdown, setCountdown] = useState<{[key: number]: number}>({});
+  const [batchImportVisible, setBatchImportVisible] = useState(false);
+  
+  // 搜索和筛选状态
+  const [searchText, setSearchText] = useState('');
+  const [dateRange, setDateRange] = useState<[any, any] | null>(null);
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>('descend');
 
   useEffect(() => {
     loadAccounts();
@@ -113,12 +130,53 @@ const Dashboard: React.FC = () => {
       const response = await githubAPI.getAccounts();
       if (response.data.success) {
         setAccounts(response.data.accounts || []);
+        setFilteredAccounts(response.data.accounts || []);
       }
     } catch (error: any) {
       message.error('加载账号列表失败');
     } finally {
       setLoading(false);
     }
+  };
+
+  // 筛选和搜索逻辑
+  useEffect(() => {
+    let filtered = [...accounts];
+
+    // 用户名搜索
+    if (searchText) {
+      filtered = filtered.filter(account => 
+        account.username.toLowerCase().includes(searchText.toLowerCase())
+      );
+    }
+
+    // 日期范围筛选
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const startDate = dateRange[0].startOf('day');
+      const endDate = dateRange[1].endOf('day');
+      filtered = filtered.filter(account => {
+        const accountDate = new Date(account.created_at);
+        return accountDate >= startDate.toDate() && accountDate <= endDate.toDate();
+      });
+    }
+
+    // 排序
+    if (sortOrder) {
+      filtered.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return sortOrder === 'ascend' ? dateA - dateB : dateB - dateA;
+      });
+    }
+
+    setFilteredAccounts(filtered);
+  }, [accounts, searchText, dateRange, sortOrder]);
+
+  // 重置筛选条件
+  const handleResetFilters = () => {
+    setSearchText('');
+    setDateRange(null);
+    setSortOrder('descend');
   };
 
   const handleAddAccount = () => {
@@ -235,6 +293,33 @@ const Dashboard: React.FC = () => {
 
   const formatTOTPToken = (token: string) => {
     return `${token.slice(0, 3)} ${token.slice(3)}`;
+  };
+
+  const handleBatchImport = async (accounts: any[]) => {
+    try {
+      const response = await githubAPI.batchImport(accounts);
+      if (response.data.success) {
+        const result = response.data.result;
+        if (result.success_count > 0) {
+          message.success(`成功导入 ${result.success_count} 个账号`);
+          if (result.error_count > 0) {
+            message.warning(`有 ${result.error_count} 个账号导入失败`);
+            // 显示错误详情
+            result.errors.forEach((error: string) => {
+              message.error(error);
+            });
+          }
+        } else {
+          message.error('批量导入失败：没有成功导入任何账号');
+        }
+      } else {
+        message.error('批量导入失败：' + response.data.message);
+      }
+      setBatchImportVisible(false);
+      loadAccounts();
+    } catch (error: any) {
+      message.error('批量导入失败：' + (error.response?.data?.detail || error.message));
+    }
   };
 
   const columns = [
@@ -368,7 +453,7 @@ const Dashboard: React.FC = () => {
 
       <Content style={{ padding: '24px' }}>
         <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <Statistic
                 title="总账号数"
@@ -377,16 +462,25 @@ const Dashboard: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
             <Card>
               <Statistic
-                title="今日创建"
-                value={accounts.filter(a => a.created_at === new Date().toISOString().split('T')[0]).length}
+                title="筛选结果"
+                value={filteredAccounts.length}
                 valueStyle={{ color: '#1890ff' }}
               />
             </Card>
           </Col>
-          <Col span={8}>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="今日创建"
+                value={accounts.filter(a => a.created_at === new Date().toISOString().split('T')[0]).length}
+                valueStyle={{ color: '#faad14' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
             <Card>
               <Statistic
                 title="技术栈"
@@ -410,6 +504,12 @@ const Dashboard: React.FC = () => {
                 批量查看TOTP
               </Button>
               <Button
+                icon={<ImportOutlined />}
+                onClick={() => setBatchImportVisible(true)}
+              >
+                批量导入
+              </Button>
+              <Button
                 icon={<ReloadOutlined />}
                 onClick={loadAccounts}
                 loading={loading}
@@ -426,16 +526,61 @@ const Dashboard: React.FC = () => {
             </Space>
           }
         >
+          {/* 搜索和筛选区域 */}
+          <div style={{ marginBottom: 16 }}>
+            <Row gutter={[16, 16]}>
+              <Col span={8}>
+                <Search
+                  placeholder="搜索GitHub用户名"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  onSearch={(value) => setSearchText(value)}
+                  style={{ width: '100%' }}
+                  prefix={<SearchOutlined />}
+                  allowClear
+                />
+              </Col>
+              <Col span={8}>
+                <RangePicker
+                  placeholder={['开始日期', '结束日期']}
+                  value={dateRange}
+                  onChange={(dates) => setDateRange(dates)}
+                  style={{ width: '100%' }}
+                />
+              </Col>
+              <Col span={4}>
+                <Select
+                  placeholder="排序方式"
+                  value={sortOrder}
+                  onChange={(value) => setSortOrder(value)}
+                  style={{ width: '100%' }}
+                >
+                  <Option value="descend">创建时间↓</Option>
+                  <Option value="ascend">创建时间↑</Option>
+                </Select>
+              </Col>
+              <Col span={4}>
+                <Button
+                  icon={<FilterOutlined />}
+                  onClick={handleResetFilters}
+                  style={{ width: '100%' }}
+                >
+                  重置筛选
+                </Button>
+              </Col>
+            </Row>
+          </div>
+
           <Table
             columns={columns}
-            dataSource={accounts}
+            dataSource={filteredAccounts}
             rowKey="id"
             loading={loading}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total) => `共 ${total} 个账号`
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
             }}
           />
         </Card>
@@ -470,6 +615,12 @@ const Dashboard: React.FC = () => {
             size="middle"
           />
         </Modal>
+
+        <BatchImportModal
+          visible={batchImportVisible}
+          onCancel={() => setBatchImportVisible(false)}
+          onSubmit={handleBatchImport}
+        />
       </Content>
     </Layout>
   );

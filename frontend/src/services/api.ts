@@ -81,6 +81,15 @@ export const githubAPI = {
   // 批量获取所有TOTP验证码
   getAllTOTP: () =>
     api.get('/github/totp/batch'),
+  
+  // 批量导入账号
+  batchImport: (accounts: Array<{
+    username: string;
+    password: string;
+    totp_secret: string;
+    created_at: string;
+  }>) =>
+    api.post('/github/accounts/batch-import', { accounts }),
 };
 
 export default api;

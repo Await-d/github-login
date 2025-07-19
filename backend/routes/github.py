@@ -15,7 +15,10 @@ from models.schemas import (
     TOTPResponse,
     TOTPToken,
     TOTPBatchResponse,
-    TOTPBatchItem
+    TOTPBatchItem,
+    BatchImportRequest,
+    BatchImportResponse,
+    BatchImportResult
 )
 from utils.auth import get_current_user
 from utils.encryption import encrypt_data, decrypt_data
@@ -320,3 +323,89 @@ async def get_all_totp_tokens(
         success=True,
         accounts=batch_items
     )
+
+
+@router.post("/accounts/batch-import", response_model=BatchImportResponse)
+async def batch_import_github_accounts(
+    import_data: BatchImportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """批量导入GitHub账号"""
+    
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    for account_data in import_data.accounts:
+        try:
+            # 验证TOTP密钥格式
+            if not validate_totp_secret(account_data.totp_secret):
+                error_count += 1
+                errors.append(f"账号 {account_data.username}: TOTP密钥格式不正确")
+                continue
+            
+            # 检查是否已存在相同用户名的账号
+            existing_account = db.query(GitHubAccount).filter(
+                GitHubAccount.user_id == current_user.id,
+                GitHubAccount.username == account_data.username
+            ).first()
+            
+            if existing_account:
+                error_count += 1
+                errors.append(f"账号 {account_data.username}: 该GitHub用户名已存在")
+                continue
+            
+            # 加密敏感数据
+            encrypted_password = encrypt_data(account_data.password)
+            encrypted_totp_secret = encrypt_data(account_data.totp_secret)
+            
+            # 创建新账号
+            new_account = GitHubAccount(
+                user_id=current_user.id,
+                username=account_data.username,
+                encrypted_password=encrypted_password,
+                encrypted_totp_secret=encrypted_totp_secret,
+                created_at=account_data.created_at
+            )
+            
+            db.add(new_account)
+            success_count += 1
+            
+        except Exception as e:
+            error_count += 1
+            errors.append(f"账号 {account_data.username}: {str(e)}")
+            continue
+    
+    # 提交所有成功的更改
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        return BatchImportResponse(
+            success=False,
+            message=f"批量导入失败: {str(e)}"
+        )
+    
+    # 构造结果
+    result = BatchImportResult(
+        success_count=success_count,
+        error_count=error_count,
+        errors=errors
+    )
+    
+    if success_count > 0:
+        message = f"批量导入完成: 成功 {success_count} 个"
+        if error_count > 0:
+            message += f", 失败 {error_count} 个"
+        return BatchImportResponse(
+            success=True,
+            message=message,
+            result=result
+        )
+    else:
+        return BatchImportResponse(
+            success=False,
+            message="批量导入失败: 没有成功导入任何账号",
+            result=result
+        )

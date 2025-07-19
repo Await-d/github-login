@@ -121,3 +121,27 @@ class LoginResponse(BaseModel):
     user: Optional[User] = None
     access_token: Optional[str] = None
     token_type: str = "bearer"
+
+
+# 批量导入相关模型
+class BatchImportItem(BaseModel):
+    username: str = Field(..., description="GitHub用户名")
+    password: str = Field(..., description="GitHub密码")
+    totp_secret: str = Field(..., description="TOTP密钥")
+    created_at: str = Field(..., description="创建日期 (YYYY-MM-DD)")
+
+
+class BatchImportRequest(BaseModel):
+    accounts: List[BatchImportItem] = Field(..., description="待导入的账号列表")
+
+
+class BatchImportResult(BaseModel):
+    success_count: int = Field(..., description="成功导入的账号数量")
+    error_count: int = Field(..., description="导入失败的账号数量")
+    errors: List[str] = Field(default=[], description="错误信息列表")
+
+
+class BatchImportResponse(BaseModel):
+    success: bool
+    message: str
+    result: Optional[BatchImportResult] = None
