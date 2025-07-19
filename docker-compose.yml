@@ -5,7 +5,7 @@ services:
     build: .
     container_name: github-manager-python
     ports:
-      - "8000:8000"
+      - "10202:8000"  # 映射外部10202端口到内部8000端口
     environment:
       - PORT=8000
       - DATABASE_URL=sqlite:///./data/github_manager.db

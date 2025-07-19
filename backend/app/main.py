@@ -105,6 +105,13 @@ if frontend_dir:
         # 检查是否存在对应的静态文件
         file_path = os.path.join(frontend_dir, path)
         if os.path.exists(file_path) and os.path.isfile(file_path):
+            # 根据文件类型设置正确的Content-Type
+            if path.endswith('.js'):
+                return FileResponse(file_path, media_type='application/javascript')
+            elif path.endswith('.css'):
+                return FileResponse(file_path, media_type='text/css')
+            elif path.endswith('.html'):
+                return FileResponse(file_path, media_type='text/html')
             return FileResponse(file_path)
         
         # 否则返回index.html，让React Router处理
