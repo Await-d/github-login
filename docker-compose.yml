@@ -2,20 +2,23 @@ version: '3.8'
 
 services:
   github-manager:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: github-login-manager
+    build: .
+    container_name: github-manager-python
     ports:
-      - "3000:3000"
+      - "8000:8000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - SESSION_SECRET=github-manager-secret-change-in-production
-      - ENCRYPTION_KEY=your-encryption-key-change-in-production
+      - PORT=8000
+      - DATABASE_URL=sqlite:///./data/github_manager.db
+      - ENCRYPTION_KEY=github_manager_key_32_bytes!!
     volumes:
       - ./data:/app/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - github-manager-network
 
@@ -24,5 +27,4 @@ networks:
     driver: bridge
 
 volumes:
-  github-data:
-    driver: local
+  data:
