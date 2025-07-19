@@ -33,10 +33,10 @@ RUN mkdir -p /app/data && chmod 755 /app/data
 
 # 设置环境变量
 ENV PYTHONPATH=/app/backend
-ENV PORT=8000
+ENV PORT=3000
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 3000
 
 # 切换到后端目录并启动应用
 WORKDIR /app/backend

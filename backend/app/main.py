@@ -118,7 +118,7 @@ if frontend_dir:
         return FileResponse(os.path.join(frontend_dir, "index.html"))
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 3000))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",

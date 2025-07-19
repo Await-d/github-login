@@ -5,16 +5,16 @@ services:
     build: .
     container_name: github-manager-python
     ports:
-      - "10202:8000"  # 映射外部10202端口到内部8000端口
+      - "10202:3000"  # 映射外部10202端口到内部3000端口
     environment:
-      - PORT=8000
+      - PORT=3000
       - DATABASE_URL=sqlite:///./data/github_manager.db
       - ENCRYPTION_KEY=Z2l0aHViX21hbmFnZXJfc2VjcmV0X2tleV8zMmJ5dGU=
     volumes:
       - ./data:/app/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
