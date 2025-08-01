@@ -21,6 +21,15 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=20, description="新用户名")
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., description="当前密码")
+    new_password: str = Field(..., min_length=6, description="新密码")
+
+
 class User(UserBase):
     id: int
     created_at: datetime

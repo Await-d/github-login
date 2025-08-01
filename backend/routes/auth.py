@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from models.database import get_db, User
-from models.schemas import UserCreate, UserLogin, LoginResponse, UserResponse
+from models.schemas import UserCreate, UserLogin, LoginResponse, UserResponse, UserUpdate, PasswordChange
 from utils.encryption import hash_password, verify_password
 from utils.auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 
@@ -87,5 +87,67 @@ async def get_current_user_info(
     return UserResponse(
         success=True,
         message="获取用户信息成功",
+        user=current_user
+    )
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_user_info(
+    user_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户信息"""
+    
+    # 检查新用户名是否已存在（如果要修改用户名）
+    if user_data.username and user_data.username != current_user.username:
+        existing_user = db.query(User).filter(User.username == user_data.username).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名已存在"
+            )
+        current_user.username = user_data.username
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    return UserResponse(
+        success=True,
+        message="用户信息更新成功",
+        user=current_user
+    )
+
+
+@router.put("/change-password", response_model=UserResponse)
+async def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """修改密码"""
+    
+    # 验证当前密码
+    if not verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前密码错误"
+        )
+    
+    # 检查新密码是否与当前密码相同
+    if verify_password(password_data.new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码不能与当前密码相同"
+        )
+    
+    # 更新密码
+    current_user.hashed_password = hash_password(password_data.new_password)
+    db.commit()
+    db.refresh(current_user)
+    
+    return UserResponse(
+        success=True,
+        message="密码修改成功",
         user=current_user
     )

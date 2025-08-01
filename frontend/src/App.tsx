@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { useAuth } from './hooks/useAuth';
@@ -8,7 +8,6 @@ import 'antd/dist/reset.css';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-  const [loginSuccess, setLoginSuccess] = useState(false);
 
   if (loading) {
     return (
@@ -25,10 +24,10 @@ const App: React.FC = () => {
 
   return (
     <ConfigProvider locale={zhCN}>
-      {isAuthenticated || loginSuccess ? (
+      {isAuthenticated ? (
         <Dashboard />
       ) : (
-        <LoginForm onLoginSuccess={() => setLoginSuccess(true)} />
+        <LoginForm />
       )}
     </ConfigProvider>
   );

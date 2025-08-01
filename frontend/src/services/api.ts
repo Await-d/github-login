@@ -45,6 +45,12 @@ export const authAPI = {
   
   getCurrentUser: () =>
     api.get('/auth/me'),
+  
+  updateUser: (data: { username?: string }) =>
+    api.put('/auth/me', data),
+  
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    api.put('/auth/change-password', data),
 };
 
 // GitHub账号接口

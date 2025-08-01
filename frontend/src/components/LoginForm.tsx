@@ -6,11 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 const { Title } = Typography;
 const { TabPane } = Tabs;
 
-interface Props {
-  onLoginSuccess: () => void;
-}
-
-const LoginForm: React.FC<Props> = ({ onLoginSuccess }) => {
+const LoginForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const { login, register } = useAuth();
 
@@ -20,7 +16,7 @@ const LoginForm: React.FC<Props> = ({ onLoginSuccess }) => {
       const result = await login(values.username, values.password);
       if (result?.success) {
         message.success('登录成功');
-        onLoginSuccess();
+        // useAuth会自动更新isAuthenticated状态，App组件会重新渲染
       } else {
         message.error(result?.message || '登录失败');
       }

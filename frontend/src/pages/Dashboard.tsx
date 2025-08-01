@@ -28,12 +28,14 @@ import {
   CopyOutlined,
   ImportOutlined,
   SearchOutlined,
-  FilterOutlined
+  FilterOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { githubAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import GitHubAccountForm from '../components/GitHubAccountForm';
 import BatchImportModal from '../components/BatchImportModal';
+import UserSettingsModal from '../components/UserSettingsModal';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -57,6 +59,11 @@ interface TOTPItem {
   time_remaining: number;
 }
 
+interface SingleTOTPData {
+  token: string;
+  time_remaining: number;
+}
+
 const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const [accounts, setAccounts] = useState<GitHubAccount[]>([]);
@@ -69,6 +76,16 @@ const Dashboard: React.FC = () => {
   const [totpLoading, setTotpLoading] = useState(false);
   const [countdown, setCountdown] = useState<{[key: number]: number}>({});
   const [batchImportVisible, setBatchImportVisible] = useState(false);
+  
+  // 单个TOTP相关状态
+  const [singleTotpVisible, setSingleTotpVisible] = useState(false);
+  const [singleTotpData, setSingleTotpData] = useState<SingleTOTPData | null>(null);
+  const [singleTotpLoading, setSingleTotpLoading] = useState(false);
+  const [singleTotpCountdown, setSingleTotpCountdown] = useState(0);
+  const [currentTotpAccount, setCurrentTotpAccount] = useState<GitHubAccount | null>(null);
+  
+  // 用户设置相关状态
+  const [userSettingsVisible, setUserSettingsVisible] = useState(false);
   
   // 搜索和筛选状态
   const [searchText, setSearchText] = useState('');
@@ -123,6 +140,34 @@ const Dashboard: React.FC = () => {
       }
     };
   }, [totpModalVisible, totpData]);
+  
+  // 单个TOTP倒计时定时器
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (singleTotpVisible && singleTotpData) {
+      // 每秒更新倒计时
+      interval = setInterval(() => {
+        setSingleTotpCountdown(prev => {
+          if (prev > 0) {
+            return prev - 1;
+          } else {
+            // 倒计时结束，刷新单个TOTP
+            if (currentTotpAccount) {
+              showSingleTOTP(currentTotpAccount);
+            }
+            return 0;
+          }
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [singleTotpVisible, singleTotpData, currentTotpAccount]);
 
   const loadAccounts = async () => {
     setLoading(true);
@@ -290,6 +335,46 @@ const Dashboard: React.FC = () => {
 
     document.body.removeChild(textArea);
   };
+  
+  const showSingleTOTP = async (account: GitHubAccount) => {
+    setSingleTotpLoading(true);
+    setCurrentTotpAccount(account);
+    setSingleTotpVisible(true);
+    
+    try {
+      const response = await githubAPI.getTOTP(account.id);
+      if (response.data.success) {
+        setSingleTotpData({
+          token: response.data.token.token,
+          time_remaining: response.data.token.time_remaining
+        });
+        setSingleTotpCountdown(response.data.token.time_remaining);
+      } else {
+        message.error('获取TOTP验证码失败');
+      }
+    } catch (error) {
+      message.error('获取TOTP验证码失败');
+    } finally {
+      setSingleTotpLoading(false);
+    }
+  };
+  
+  const closeSingleTOTPModal = () => {
+    setSingleTotpVisible(false);
+    setSingleTotpData(null);
+    setSingleTotpCountdown(0);
+    setCurrentTotpAccount(null);
+  };
+  
+  const handleUserUpdate = (updatedUser: any) => {
+    // 更新本地用户信息
+    const currentUserData = JSON.parse(localStorage.getItem('user') || '{}');
+    const newUserData = { ...currentUserData, ...updatedUser };
+    localStorage.setItem('user', JSON.stringify(newUserData));
+    
+    // 触发useAuth的更新（如果需要的话）
+    window.location.reload();
+  };
 
   const formatTOTPToken = (token: string) => {
     return `${token.slice(0, 3)} ${token.slice(3)}`;
@@ -345,6 +430,14 @@ const Dashboard: React.FC = () => {
       key: 'actions',
       render: (_: any, record: GitHubAccount) => (
         <Space>
+          <Button
+            type="primary"
+            size="small"
+            icon={<KeyOutlined />}
+            onClick={() => showSingleTOTP(record)}
+          >
+            TOTP
+          </Button>
           <Button
             type="primary"
             size="small"
@@ -441,6 +534,13 @@ const Dashboard: React.FC = () => {
         </Title>
         <Space>
           <Text>欢迎，{user?.username}</Text>
+          <Button
+            type="text"
+            icon={<SettingOutlined />}
+            onClick={() => setUserSettingsVisible(true)}
+          >
+            用户设置
+          </Button>
           <Button
             type="text"
             icon={<LogoutOutlined />}
@@ -620,6 +720,73 @@ const Dashboard: React.FC = () => {
           visible={batchImportVisible}
           onCancel={() => setBatchImportVisible(false)}
           onSubmit={handleBatchImport}
+        />
+        
+        <Modal
+          title={`${currentTotpAccount?.username} - TOTP验证码`}
+          open={singleTotpVisible}
+          onCancel={closeSingleTOTPModal}
+          footer={[
+            <Button key="refresh" icon={<ReloadOutlined />} onClick={() => currentTotpAccount && showSingleTOTP(currentTotpAccount)} loading={singleTotpLoading}>
+              刷新
+            </Button>,
+            <Button key="close" onClick={closeSingleTOTPModal}>
+              关闭
+            </Button>
+          ]}
+          width={400}
+        >
+          {singleTotpLoading ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Text>正在生成TOTP验证码...</Text>
+            </div>
+          ) : singleTotpData ? (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <div>
+                  <Text type="secondary">验证码</Text>
+                  <div style={{ margin: '10px 0' }}>
+                    <Text code style={{ fontSize: '24px', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                      {formatTOTPToken(singleTotpData.token)}
+                    </Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => copyToClipboard(singleTotpData.token)}
+                      style={{ marginLeft: 8 }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Text type="secondary">剩余时间</Text>
+                  <div style={{ margin: '10px 0' }}>
+                    <Progress
+                      type="circle"
+                      size={60}
+                      percent={(singleTotpCountdown / 30) * 100}
+                      showInfo={false}
+                      strokeColor={singleTotpCountdown <= 10 ? '#ff4d4f' : '#52c41a'}
+                    />
+                    <div style={{ marginTop: 8 }}>
+                      <Text style={{ fontSize: '16px' }}>{singleTotpCountdown}秒</Text>
+                    </div>
+                  </div>
+                </div>
+              </Space>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <Text type="secondary">无法获取TOTP验证码</Text>
+            </div>
+          )}
+        </Modal>
+        
+        <UserSettingsModal
+          visible={userSettingsVisible}
+          onCancel={() => setUserSettingsVisible(false)}
+          user={user}
+          onUserUpdate={handleUserUpdate}
         />
       </Content>
     </Layout>
