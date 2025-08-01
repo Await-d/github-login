@@ -38,8 +38,8 @@ steps:
             -e UMASK=000 \
             -e SESSION_SECRET="github-manager-production-secret-$(date +%s)" \
             -e ENCRYPTION_KEY="github-encryption-key-$(date +%s)" \
-            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/data:/app/data \
-            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/config:/app/config \
+            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/data:/app/backend/data \
+            -v /volume1/docker/1panel/apps/local/github_manager/localmanager/config:/app/backend/config \
             --restart unless-stopped \
             --network 1panel-network \
             github-manager:latest
