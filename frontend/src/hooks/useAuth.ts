@@ -3,7 +3,7 @@ import { authAPI } from '../services/api';
 
 interface User {
   id: number;
-  username: string;
+  username: string;  
   created_at: string;
 }
 
@@ -17,19 +17,38 @@ export const useAuth = () => {
 
   const checkAuth = async () => {
     const token = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    
     if (!token) {
       setLoading(false);
       return;
+    }
+
+    // 先从localStorage恢复用户状态，提供快速响应
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (error) {
+        localStorage.removeItem('user');
+      }
     }
 
     try {
       const response = await authAPI.getCurrentUser();
       if (response.data.success) {
         setUser(response.data.user);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      } else {
+        // API调用失败，清除状态
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setUser(null);
       }
     } catch (error) {
+      // API调用失败，清除状态
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -38,11 +57,14 @@ export const useAuth = () => {
   const login = async (username: string, password: string) => {
     try {
       const response = await authAPI.login(username, password);
-      if (response.data.success) {
+      if (response.data.success && response.data.user && response.data.access_token) {
+        // 立即更新状态和本地存储
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
         return { success: true };
+      } else {
+        return { success: false, message: '登录响应无效' };
       }
     } catch (error: any) {
       return {
@@ -57,6 +79,8 @@ export const useAuth = () => {
       const response = await authAPI.register(username, password);
       if (response.data.success) {
         return { success: true };
+      } else {
+        return { success: false, message: response.data.message || '注册失败' };
       }
     } catch (error: any) {
       return {
@@ -67,6 +91,7 @@ export const useAuth = () => {
   };
 
   const logout = () => {
+    // 立即清除状态和本地存储
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
@@ -78,6 +103,6 @@ export const useAuth = () => {
     login,
     register,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated: !!user && !!localStorage.getItem('token')
   };
 };
