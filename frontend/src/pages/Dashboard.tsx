@@ -15,7 +15,8 @@ import {
   Progress,
   Input,
   DatePicker,
-  Select
+  Select,
+  Tabs
 } from 'antd';
 import {
   PlusOutlined,
@@ -29,13 +30,16 @@ import {
   ImportOutlined,
   SearchOutlined,
   FilterOutlined,
-  SettingOutlined
+  SettingOutlined,
+  GithubOutlined,
+  GlobalOutlined
 } from '@ant-design/icons';
 import { githubAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import GitHubAccountForm from '../components/GitHubAccountForm';
 import BatchImportModal from '../components/BatchImportModal';
 import UserSettingsModal from '../components/UserSettingsModal';
+import ApiWebsiteManagement from './ApiWebsiteManagement';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -552,138 +556,167 @@ const Dashboard: React.FC = () => {
       </Header>
 
       <Content style={{ padding: '24px' }}>
-        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="总账号数"
-                value={accounts.length}
-                valueStyle={{ color: '#3f8600' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="筛选结果"
-                value={filteredAccounts.length}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="今日创建"
-                value={accounts.filter(a => a.created_at === new Date().toISOString().split('T')[0]).length}
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title="技术栈"
-                value="Python + React"
-                valueStyle={{ color: '#722ed1' }}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <Tabs
+          defaultActiveKey="github"
+          size="large"
+          items={[
+            {
+              key: 'github',
+              label: (
+                <span>
+                  <GithubOutlined />
+                  GitHub账号管理
+                </span>
+              ),
+              children: (
+                <div>
+                  <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+                    <Col span={6}>
+                      <Card>
+                        <Statistic
+                          title="总账号数"
+                          value={accounts.length}
+                          valueStyle={{ color: '#3f8600' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col span={6}>
+                      <Card>
+                        <Statistic
+                          title="筛选结果"
+                          value={filteredAccounts.length}
+                          valueStyle={{ color: '#1890ff' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col span={6}>
+                      <Card>
+                        <Statistic
+                          title="今日创建"
+                          value={accounts.filter(a => a.created_at === new Date().toISOString().split('T')[0]).length}
+                          valueStyle={{ color: '#faad14' }}
+                        />
+                      </Card>
+                    </Col>
+                    <Col span={6}>
+                      <Card>
+                        <Statistic
+                          title="技术栈"
+                          value="Python + React"
+                          valueStyle={{ color: '#722ed1' }}
+                        />
+                      </Card>
+                    </Col>
+                  </Row>
 
-        <Card
-          title="GitHub账号列表"
-          extra={
-            <Space>
-              <Button
-                type="primary"
-                icon={<KeyOutlined />}
-                onClick={showTOTPBatch}
-                loading={totpLoading}
-              >
-                批量查看TOTP
-              </Button>
-              <Button
-                icon={<ImportOutlined />}
-                onClick={() => setBatchImportVisible(true)}
-              >
-                批量导入
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={loadAccounts}
-                loading={loading}
-              >
-                刷新
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAddAccount}
-              >
-                添加账号
-              </Button>
-            </Space>
-          }
-        >
-          {/* 搜索和筛选区域 */}
-          <div style={{ marginBottom: 16 }}>
-            <Row gutter={[16, 16]}>
-              <Col span={8}>
-                <Search
-                  placeholder="搜索GitHub用户名"
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  onSearch={(value) => setSearchText(value)}
-                  style={{ width: '100%' }}
-                  prefix={<SearchOutlined />}
-                  allowClear
-                />
-              </Col>
-              <Col span={8}>
-                <RangePicker
-                  placeholder={['开始日期', '结束日期']}
-                  value={dateRange}
-                  onChange={(dates) => setDateRange(dates)}
-                  style={{ width: '100%' }}
-                />
-              </Col>
-              <Col span={4}>
-                <Select
-                  placeholder="排序方式"
-                  value={sortOrder}
-                  onChange={(value) => setSortOrder(value)}
-                  style={{ width: '100%' }}
-                >
-                  <Option value="descend">创建时间↓</Option>
-                  <Option value="ascend">创建时间↑</Option>
-                </Select>
-              </Col>
-              <Col span={4}>
-                <Button
-                  icon={<FilterOutlined />}
-                  onClick={handleResetFilters}
-                  style={{ width: '100%' }}
-                >
-                  重置筛选
-                </Button>
-              </Col>
-            </Row>
-          </div>
+                  <Card
+                    title="GitHub账号列表"
+                    extra={
+                      <Space>
+                        <Button
+                          type="primary"
+                          icon={<KeyOutlined />}
+                          onClick={showTOTPBatch}
+                          loading={totpLoading}
+                        >
+                          批量查看TOTP
+                        </Button>
+                        <Button
+                          icon={<ImportOutlined />}
+                          onClick={() => setBatchImportVisible(true)}
+                        >
+                          批量导入
+                        </Button>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={loadAccounts}
+                          loading={loading}
+                        >
+                          刷新
+                        </Button>
+                        <Button
+                          type="primary"
+                          icon={<PlusOutlined />}
+                          onClick={handleAddAccount}
+                        >
+                          添加账号
+                        </Button>
+                      </Space>
+                    }
+                  >
+                    {/* 搜索和筛选区域 */}
+                    <div style={{ marginBottom: 16 }}>
+                      <Row gutter={[16, 16]}>
+                        <Col span={8}>
+                          <Search
+                            placeholder="搜索GitHub用户名"
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            onSearch={(value) => setSearchText(value)}
+                            style={{ width: '100%' }}
+                            prefix={<SearchOutlined />}
+                            allowClear
+                          />
+                        </Col>
+                        <Col span={8}>
+                          <RangePicker
+                            placeholder={['开始日期', '结束日期']}
+                            value={dateRange}
+                            onChange={(dates) => setDateRange(dates)}
+                            style={{ width: '100%' }}
+                          />
+                        </Col>
+                        <Col span={4}>
+                          <Select
+                            placeholder="排序方式"
+                            value={sortOrder}
+                            onChange={(value) => setSortOrder(value)}
+                            style={{ width: '100%' }}
+                          >
+                            <Option value="descend">创建时间↓</Option>
+                            <Option value="ascend">创建时间↑</Option>
+                          </Select>
+                        </Col>
+                        <Col span={4}>
+                          <Button
+                            icon={<FilterOutlined />}
+                            onClick={handleResetFilters}
+                            style={{ width: '100%' }}
+                          >
+                            重置筛选
+                          </Button>
+                        </Col>
+                      </Row>
+                    </div>
 
-          <Table
-            columns={columns}
-            dataSource={filteredAccounts}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
-            }}
-          />
-        </Card>
+                    <Table
+                      columns={columns}
+                      dataSource={filteredAccounts}
+                      rowKey="id"
+                      loading={loading}
+                      pagination={{
+                        pageSize: 10,
+                        showSizeChanger: true,
+                        showQuickJumper: true,
+                        showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
+                      }}
+                    />
+                  </Card>
+                </div>
+              )
+            },
+            {
+              key: 'api-websites',
+              label: (
+                <span>
+                  <GlobalOutlined />
+                  API网站管理
+                </span>
+              ),
+              children: <ApiWebsiteManagement />
+            }
+          ]}
+        />
 
         <GitHubAccountForm
           visible={formVisible}

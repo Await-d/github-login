@@ -99,4 +99,41 @@ export const githubAPI = {
     api.post('/github/accounts/batch-import', { accounts }),
 };
 
+// API网站接口
+export const apiWebsiteAPI = {
+  // 获取所有API网站
+  getWebsites: () =>
+    api.get('/api-website/websites'),
+  
+  // 获取单个API网站详情
+  getWebsite: (id: number) =>
+    api.get(`/api-website/websites/${id}`),
+  
+  // 创建API网站
+  createWebsite: (data: {
+    name: string;
+    type: string;
+    login_url: string;
+    username: string;
+    password: string;
+  }) =>
+    api.post('/api-website/websites', data),
+  
+  // 更新API网站
+  updateWebsite: (id: number, data: any) =>
+    api.put(`/api-website/websites/${id}`, data),
+  
+  // 删除API网站
+  deleteWebsite: (id: number) =>
+    api.delete(`/api-website/websites/${id}`),
+  
+  // 模拟登录
+  simulateLogin: (id: number) =>
+    api.post(`/api-website/websites/${id}/login`),
+  
+  // 获取账户信息
+  getAccountInfo: (id: number) =>
+    api.get(`/api-website/websites/${id}/account-info`),
+};
+
 export default api;
