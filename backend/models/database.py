@@ -2,7 +2,7 @@
 数据库模型和配置
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -39,6 +39,8 @@ class User(Base):
     
     # 关联的GitHub账号
     github_accounts = relationship("GitHubAccount", back_populates="owner", cascade="all, delete-orphan")
+    # 关联的API网站账号
+    api_websites = relationship("ApiWebsite", back_populates="owner", cascade="all, delete-orphan")
 
 
 class GitHubAccount(Base):
@@ -55,6 +57,35 @@ class GitHubAccount(Base):
     
     # 关联用户
     owner = relationship("User", back_populates="github_accounts")
+
+
+class ApiWebsite(Base):
+    """API网站账号模型"""
+    __tablename__ = "api_websites"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)  # 网站名称，如"anyrouter.top"
+    type = Column(String, nullable=False, default="api网站1")  # 网站类型
+    login_url = Column(String, nullable=False)  # 登录URL
+    username = Column(String, nullable=False)  # 登录用户名
+    encrypted_password = Column(Text, nullable=False)  # 加密的登录密码
+    
+    # 登录状态和会话信息
+    is_logged_in = Column(String, default="false")  # 登录状态: "true"/"false"
+    session_data = Column(Text)  # 加密的会话数据（cookies等）
+    last_login_time = Column(DateTime)  # 最后登录时间
+    
+    # 账户信息
+    balance = Column(Float, default=0.0)  # 余额
+    api_keys = Column(Text)  # 加密的API密钥列表（JSON格式）
+    
+    # 时间字段
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # 关联用户
+    owner = relationship("User", back_populates="api_websites")
 
 
 def get_db():

@@ -154,3 +154,90 @@ class BatchImportResponse(BaseModel):
     success: bool
     message: str
     result: Optional[BatchImportResult] = None
+
+
+# API网站相关模型
+class ApiWebsiteBase(BaseModel):
+    name: str = Field(..., description="网站名称")
+    type: str = Field(default="api网站1", description="网站类型")
+    login_url: str = Field(..., description="登录URL")
+    username: str = Field(..., description="登录用户名")
+    password: str = Field(..., description="登录密码")
+
+
+class ApiWebsiteCreate(ApiWebsiteBase):
+    pass
+
+
+class ApiWebsiteUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    login_url: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+
+class ApiWebsite(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    type: str
+    login_url: str
+    username: str
+    password: Optional[str] = None  # 可选，用于查看详情时
+    is_logged_in: str
+    last_login_time: Optional[datetime] = None
+    balance: float
+    api_keys: Optional[str] = None  # JSON字符串
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ApiWebsiteSafe(BaseModel):
+    """安全的API网站信息（隐藏敏感字段）"""
+    id: int
+    user_id: int
+    name: str
+    type: str
+    login_url: str
+    username: str
+    is_logged_in: str
+    last_login_time: Optional[datetime] = None
+    balance: float
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ApiWebsiteResponse(BaseModel):
+    success: bool
+    message: str
+    website: Optional[ApiWebsite] = None
+    websites: Optional[List[ApiWebsiteSafe]] = None
+
+
+# 登录模拟相关模型
+class LoginSimulationRequest(BaseModel):
+    website_id: int = Field(..., description="网站ID")
+
+
+class LoginSimulationResponse(BaseModel):
+    success: bool
+    message: str
+    is_logged_in: bool
+    balance: Optional[float] = None
+    session_info: Optional[str] = None
+
+
+# 账户信息获取相关模型
+class AccountInfoResponse(BaseModel):
+    success: bool
+    message: str
+    balance: Optional[float] = None
+    api_keys: Optional[List[dict]] = None
+    last_updated: Optional[datetime] = None

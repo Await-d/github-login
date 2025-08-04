@@ -17,7 +17,7 @@ import os
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, backend_dir)
 
-from routes import auth, github
+from routes import auth, github, api_website
 from models.database import init_db
 
 
@@ -55,6 +55,7 @@ app.add_middleware(
 # 注册路由
 app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(github.router, prefix="/api/github", tags=["GitHub管理"])
+app.include_router(api_website.router, prefix="/api/api-website", tags=["API网站管理"])
 
 # 健康检查
 @app.get("/api/health")
