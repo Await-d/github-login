@@ -3,24 +3,40 @@
 专门用于模拟登录各种API网站并获取账户信息
 """
 
-import requests
 import json
 import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 import re
 from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
+
+# 可选依赖，优雅降级
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+    print("⚠️  警告: requests 模块未安装，网站登录模拟功能将不可用")
+
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError:
+    HAS_BS4 = False
+    print("⚠️  警告: beautifulsoup4 模块未安装，HTML解析功能将不可用")
 
 
 class WebsiteSimulator:
     """网站登录模拟器基类"""
     
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
+        if HAS_REQUESTS:
+            self.session = requests.Session()
+            self.session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
+        else:
+            self.session = None
     
     def simulate_login(self, login_url: str, username: str, password: str) -> Tuple[bool, str, Dict]:
         """
@@ -34,6 +50,9 @@ class WebsiteSimulator:
         Returns:
             (是否成功, 消息, 会话数据)
         """
+        if not HAS_REQUESTS:
+            return False, "系统缺少 requests 依赖，无法执行网站登录模拟", {}
+        
         try:
             # 根据不同网站类型调用不同的登录逻辑
             domain = urlparse(login_url).netloc
@@ -55,6 +74,9 @@ class WebsiteSimulator:
                 return False, f"无法访问登录页面，状态码: {response.status_code}", {}
             
             # 2. 解析登录页面，查找表单和CSRF token
+            if not HAS_BS4:
+                return False, "系统缺少 beautifulsoup4 依赖，无法解析HTML表单", {}
+            
             soup = BeautifulSoup(response.text, 'html.parser')
             form = soup.find('form')
             
@@ -163,6 +185,9 @@ class WebsiteSimulator:
         Returns:
             (是否成功, 账户信息)
         """
+        if not HAS_REQUESTS:
+            return False, {'error': '系统缺少 requests 依赖，无法获取账户信息'}
+        
         try:
             # 恢复会话
             if 'cookies' in session_data:
@@ -226,7 +251,8 @@ class WebsiteSimulator:
                             
                         except json.JSONDecodeError:
                             # 如果不是JSON，尝试解析HTML
-                            soup = BeautifulSoup(response.text, 'html.parser')
+                            if HAS_BS4:
+                                soup = BeautifulSoup(response.text, 'html.parser')
                             
                             # 查找余额信息
                             balance_patterns = [
