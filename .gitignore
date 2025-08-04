@@ -64,3 +64,37 @@ Thumbs.db
 # 敏感测试文件 - 防止真实数据泄露
 test-system.js
 *.test.local.js
+
+# Python相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# FastAPI相关
+*.db
+*.sqlite
+*.sqlite3
+
+# 后端日志和临时文件
+backend.log
+nohup.out
