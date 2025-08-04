@@ -1,194 +1,162 @@
-# 部署指南
+# GitHub账号管理系统 - 部署指南
 
-## 🐳 Docker 部署
+## 🚀 线上部署步骤
 
-### 问题修复说明
+### 1. 环境要求
+- Python 3.8+ (推荐 3.12)
+- Git
+- 系统依赖：gcc, libffi-dev, libssl-dev
 
-原始Dockerfile遇到的问题：
-1. ❌ 缺少 `package-lock.json` 文件
-2. ❌ 使用过时的 `npm ci --only=production` 参数
-3. ❌ TypeScript编译器(tsc)在生产依赖中不存在
+### 2. 部署步骤
 
-### 修复内容
-1. ✅ 添加 `package-lock.json` 到版本控制
-2. ✅ 修复构建流程：先安装完整依赖→构建→清理开发依赖
-3. ✅ 创建多种Dockerfile选项适应不同需求
-
-## 🚀 快速部署
-
-### 方式1: 快速部署 (推荐)
+#### 步骤1: 克隆代码
 ```bash
-# 使用Root权限版本解决权限问题
-docker-compose -f docker-compose.root.yml up -d
+git clone http://gogs.52067373.xyz/await/github-manager.git
+cd github-manager
 ```
 
-### 方式2: 标准部署
+#### 步骤2: 安装系统依赖（Ubuntu/Debian）
 ```bash
-# 修复数据目录权限后使用标准版
-mkdir -p ./data && chmod 777 ./data
-docker-compose up -d
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-venv gcc g++ libffi-dev libssl-dev
 ```
 
-### 方式3: 生产环境优化版
+#### 步骤3: 创建虚拟环境
 ```bash
-# 使用多阶段构建减小镜像体积
-docker build -f Dockerfile.optimized -t github-manager:optimized .
-docker run -d -p 3000:3000 -v github-data:/app/data github-manager:optimized
+cd backend
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-### 可用的Dockerfile版本
-
-| 文件 | 特点 | 适用场景 | 权限 |
-|------|------|----------|------|
-| `Dockerfile` | 标准版，npm ci + 依赖清理 | 一般部署 | 非root |
-| `Dockerfile.root` | **Root用户版，解决权限问题** | **快速部署** | **Root** |
-| `Dockerfile.optimized` | 多阶段构建，最小镜像体积 | 生产环境 | 非root |
-
-### 🚨 权限问题快速解决方案
-
-如果遇到数据库权限错误 `SQLITE_CANTOPEN`，推荐使用root版本：
-
+#### 步骤4: 安装Python依赖
 ```bash
-# 使用root用户版本(推荐解决权限问题)
-docker-compose -f docker-compose.root.yml up -d
-
-# 或手动构建
-docker build -f Dockerfile.root -t github-manager:root .
-docker run -d -p 3000:3000 -v github-data:/app/data github-manager:root
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-## 📋 环境变量配置
+#### 步骤5: 检查依赖
+```bash
+python check_dependencies.py
+```
+
+#### 步骤6: 构建前端（如需要）
+```bash
+cd ../frontend
+npm install
+npm run build
+cd ../backend
+```
+
+#### 步骤7: 启动服务
+```bash
+# 开发环境
+python app/main.py
+
+# 生产环境
+python -c "
+from app.main import app
+import uvicorn
+uvicorn.run(app, host='0.0.0.0', port=8000)
+"
+```
+
+### 3. 环境变量配置
 
 创建 `.env` 文件：
 ```bash
-cp .env.example .env
-# 编辑 .env 文件，修改安全相关配置
+DATABASE_URL=/path/to/your/data
+CREATE_DEFAULT_ADMIN=true
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=your_secure_password
+PORT=8000
 ```
 
-**重要**: 生产环境必须修改以下变量：
-- `SESSION_SECRET` - 会话密钥
-- `ENCRYPTION_KEY` - 数据加密密钥
+### 4. 使用systemd服务（推荐）
 
-## 🔧 Drone CI/CD 部署
+创建服务文件 `/etc/systemd/system/github-manager.service`：
+```ini
+[Unit]
+Description=GitHub Manager Service
+After=network.target
 
-项目包含完整的 `.drone.yml` 配置，支持自动部署到1Panel环境。
+[Service]
+Type=simple
+User=your_user
+WorkingDirectory=/path/to/github-manager/backend
+Environment=PATH=/path/to/github-manager/backend/venv/bin
+ExecStart=/path/to/github-manager/backend/venv/bin/python app/main.py
+Restart=always
 
-### 部署流程
-1. 代码推送到仓库
-2. Drone自动触发构建
-3. 构建Docker镜像
-4. 创建必要目录
-5. 启动容器服务
-
-### 部署目录结构
-```
-/volume1/docker/1panel/apps/local/github_manager/
-└── localmanager/
-    ├── data/     # 数据库文件
-    └── config/   # 配置文件
+[Install]
+WantedBy=multi-user.target
 ```
 
-## 🏥 健康检查
-
-访问健康检查端点：
+启动服务：
 ```bash
-curl http://localhost:3000/api/health
+sudo systemctl daemon-reload
+sudo systemctl enable github-manager
+sudo systemctl start github-manager
+sudo systemctl status github-manager
 ```
 
-预期响应：
-```json
-{
-  "success": true,
-  "message": "GitHub Manager API is running",
-  "timestamp": "2025-07-13T06:45:00.000Z"
+### 5. 使用Nginx反代理（可选）
+
+Nginx配置示例：
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
 
-## 📊 监控和日志
+## 🔍 故障排除
 
-### 查看容器日志
+### 依赖问题
+如果遇到 `ModuleNotFoundError`：
+1. 确保在虚拟环境中运行：`source venv/bin/activate`
+2. 重新安装依赖：`pip install -r requirements.txt`
+3. 运行依赖检查：`python check_dependencies.py`
+
+### 端口占用
+如果8000端口被占用：
 ```bash
-docker logs github-manager
-
-# 实时日志
-docker logs -f github-manager
+# 查找占用进程
+sudo netstat -tulpn | grep :8000
+# 或修改端口
+export PORT=8080
 ```
 
-### 容器状态监控
-```bash
-docker stats github-manager
-```
+### 数据库问题
+如果数据库初始化失败：
+1. 检查data目录权限
+2. 删除旧数据库文件重新初始化
+3. 检查磁盘空间
 
-## 🔒 生产环境安全建议
+## 📱 访问地址
 
-1. **修改默认密钥**
-   ```bash
-   # 生成安全的密钥
-   openssl rand -hex 32  # ENCRYPTION_KEY
-   openssl rand -hex 64  # SESSION_SECRET
-   ```
+部署成功后访问：
+- 前端应用: http://your-server:8000/
+- API文档: http://your-server:8000/docs
+- 健康检查: http://your-server:8000/api/health
 
-2. **使用HTTPS**
-   - 配置反向代理 (Nginx/Traefik)
-   - 申请SSL证书
+## 🔐 默认账号
 
-3. **网络安全**
-   - 使用防火墙限制端口访问
-   - 配置CORS白名单
+首次部署后可以：
+1. 使用创建的默认管理员账号登录
+2. 或注册新账号使用
+3. 建议登录后立即修改默认密码
 
-4. **数据备份**
-   ```bash
-   # 备份数据库
-   docker exec github-manager cp /app/data/github-manager.db /tmp/
-   docker cp github-manager:/tmp/github-manager.db ./backup/
-   ```
+## 📞 技术支持
 
-## 🛠️ 故障排除
-
-### 常见问题
-
-1. **容器启动失败**
-   ```bash
-   # 检查日志
-   docker logs github-manager
-   
-   # 检查端口占用
-   netstat -tlnp | grep 3000
-   ```
-
-2. **数据库权限问题**
-   ```bash
-   # 修复数据目录权限
-   sudo chown -R 1001:1001 ./data
-   ```
-
-3. **内存不足**
-   ```bash
-   # 增加资源限制
-   docker update --memory=512m github-manager
-   ```
-
-## 📈 性能优化
-
-1. **镜像优化**
-   - 使用 `Dockerfile.optimized` 多阶段构建
-   - 清理npm缓存
-   - 使用Alpine基础镜像
-
-2. **运行时优化**
-   - 设置合适的内存限制
-   - 配置健康检查
-   - 使用容器编排工具
-
-## 🔄 更新部署
-
-```bash
-# 拉取最新代码
-git pull
-
-# 重新构建镜像
-docker-compose build
-
-# 滚动更新
-docker-compose up -d --no-deps github-manager
-```
+如遇问题，请提供：
+1. 错误日志
+2. 依赖检查结果 (`python check_dependencies.py`)
+3. 系统环境信息
