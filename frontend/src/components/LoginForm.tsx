@@ -18,8 +18,10 @@ const LoginForm: React.FC = () => {
         message.success('登录成功');
         // useAuth会自动更新isAuthenticated状态，App组件会重新渲染
       } else {
-        message.error(result?.message || '登录失败');
+        message.error(result?.message || '登录失败，请检查用户名和密码');
       }
+    } catch (error: any) {
+      message.error('网络错误，请稍后重试');
     } finally {
       setLoading(false);
     }

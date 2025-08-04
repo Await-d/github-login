@@ -10,6 +10,7 @@ interface User {
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -20,6 +21,7 @@ export const useAuth = () => {
     const savedUser = localStorage.getItem('user');
     
     if (!token) {
+      setIsAuthenticated(false);
       setLoading(false);
       return;
     }
@@ -28,8 +30,10 @@ export const useAuth = () => {
     if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
+        setIsAuthenticated(true);
       } catch (error) {
         localStorage.removeItem('user');
+        setIsAuthenticated(false);
       }
     }
 
@@ -38,17 +42,20 @@ export const useAuth = () => {
       if (response.data.success) {
         setUser(response.data.user);
         localStorage.setItem('user', JSON.stringify(response.data.user));
+        setIsAuthenticated(true);
       } else {
         // API调用失败，清除状态
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
+        setIsAuthenticated(false);
       }
     } catch (error) {
       // API调用失败，清除状态
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
@@ -62,6 +69,7 @@ export const useAuth = () => {
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         setUser(response.data.user);
+        setIsAuthenticated(true);
         return { success: true };
       } else {
         return { success: false, message: '登录响应无效' };
@@ -95,6 +103,7 @@ export const useAuth = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setIsAuthenticated(false);
   };
 
   return {
@@ -103,6 +112,6 @@ export const useAuth = () => {
     login,
     register,
     logout,
-    isAuthenticated: !!user && !!localStorage.getItem('token')
+    isAuthenticated
   };
 };

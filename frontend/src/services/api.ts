@@ -29,7 +29,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      // 重新加载页面回到登录状态
+      window.location.reload();
     }
     return Promise.reject(error);
   }
