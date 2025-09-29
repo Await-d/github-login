@@ -18,7 +18,8 @@ from models.schemas import (
     TOTPBatchItem,
     BatchImportRequest,
     BatchImportResponse,
-    BatchImportResult
+    BatchImportResult,
+    GitHubOAuthLoginResponse
 )
 from utils.auth import get_current_user
 from utils.encryption import encrypt_data, decrypt_data
@@ -409,3 +410,92 @@ async def batch_import_github_accounts(
             message="批量导入失败: 没有成功导入任何账号",
             result=result
         )
+
+
+@router.post("/oauth-login/{github_account_id}", response_model=GitHubOAuthLoginResponse)
+async def github_oauth_login(
+    github_account_id: int,
+    website_url: str = "https://anyrouter.top",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    使用GitHub账号通过OAuth登录第三方网站（如anyrouter.top）
+    """
+    # 获取GitHub账号信息
+    github_account = db.query(GitHubAccount).filter(
+        GitHubAccount.id == github_account_id,
+        GitHubAccount.user_id == current_user.id
+    ).first()
+    
+    if not github_account:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="GitHub账号不存在"
+        )
+    
+    try:
+        # 解密GitHub账号信息
+        github_username = github_account.username
+        github_password = decrypt_data(github_account.encrypted_password)
+        totp_secret = decrypt_data(github_account.encrypted_totp_secret)
+        
+        # 导入WebsiteSimulator
+        from utils.website_simulator import website_simulator
+        
+        # 执行GitHub OAuth登录
+        success, message, session_data = website_simulator.simulate_github_oauth_login(
+            website_url,
+            github_username,
+            github_password,
+            totp_secret
+        )
+        
+        if success:
+            return GitHubOAuthLoginResponse(
+                success=True,
+                message=message,
+                login_method="github_oauth",
+                session_info="GitHub OAuth登录成功，会话已建立",
+                oauth_details={
+                    "github_account": github_username,
+                    "target_website": website_url,
+                    "login_time": session_data.get("login_time"),
+                    "cookies_count": len(session_data.get("cookies", {}))
+                }
+            )
+        else:
+            return GitHubOAuthLoginResponse(
+                success=False,
+                message=message,
+                login_method="github_oauth",
+                session_info=None,
+                oauth_details={
+                    "github_account": github_username,
+                    "target_website": website_url,
+                    "error_details": message
+                }
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"GitHub OAuth登录失败: {str(e)}"
+        )
+
+
+@router.post("/oauth-login-anyrouter/{github_account_id}", response_model=GitHubOAuthLoginResponse)  
+async def github_oauth_login_anyrouter(
+    github_account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    专门用于anyrouter.top的GitHub OAuth登录快捷方式
+    """
+    return await github_oauth_login(
+        github_account_id=github_account_id,
+        website_url="https://anyrouter.top",
+        current_user=current_user,
+        db=db
+    )

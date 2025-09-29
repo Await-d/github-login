@@ -2,7 +2,7 @@
 数据库模型和配置
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.sql import func
@@ -86,6 +86,71 @@ class ApiWebsite(Base):
     
     # 关联用户
     owner = relationship("User", back_populates="api_websites")
+
+
+class ScheduledTask(Base):
+    """定时任务模型"""
+    __tablename__ = "scheduled_tasks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # 任务基本信息
+    name = Column(String, nullable=False)  # 任务名称
+    description = Column(Text)  # 任务描述
+    task_type = Column(String, nullable=False)  # 任务类型: github_oauth_login
+    
+    # 定时配置
+    cron_expression = Column(String, nullable=False)  # cron表达式
+    timezone = Column(String, default="Asia/Shanghai")  # 时区
+    
+    # 任务参数
+    task_params = Column(Text)  # JSON格式的任务参数
+    
+    # 状态信息
+    is_active = Column(Boolean, default=True)  # 是否启用
+    last_run_time = Column(DateTime)  # 最后执行时间
+    next_run_time = Column(DateTime)  # 下次执行时间
+    last_result = Column(Text)  # 最后执行结果
+    run_count = Column(Integer, default=0)  # 执行次数
+    success_count = Column(Integer, default=0)  # 成功次数
+    error_count = Column(Integer, default=0)  # 失败次数
+    
+    # 时间字段
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # 关联用户
+    owner = relationship("User", back_populates="scheduled_tasks")
+
+
+class TaskExecutionLog(Base):
+    """任务执行日志模型"""
+    __tablename__ = "task_execution_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("scheduled_tasks.id"), nullable=False)
+    
+    # 执行信息
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime)
+    duration = Column(Float)  # 执行时长(秒)
+    status = Column(String, nullable=False)  # success, failed, running
+    
+    # 结果信息
+    result_message = Column(Text)  # 执行结果消息
+    error_details = Column(Text)  # 错误详情
+    execution_data = Column(Text)  # JSON格式的执行数据
+    
+    # 关联任务
+    task = relationship("ScheduledTask", back_populates="execution_logs")
+
+
+# 更新User模型关联
+User.scheduled_tasks = relationship("ScheduledTask", back_populates="owner", cascade="all, delete-orphan")
+
+# 更新ScheduledTask模型关联  
+ScheduledTask.execution_logs = relationship("TaskExecutionLog", back_populates="task", cascade="all, delete-orphan")
 
 
 def get_db():

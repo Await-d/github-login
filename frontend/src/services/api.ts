@@ -97,6 +97,63 @@ export const githubAPI = {
     created_at: string;
   }>) =>
     api.post('/github/accounts/batch-import', { accounts }),
+  
+  // GitHub OAuth登录到第三方网站
+  oauthLogin: (githubAccountId: number, websiteUrl: string = 'https://anyrouter.top') =>
+    api.post(`/github/oauth-login/${githubAccountId}?website_url=${encodeURIComponent(websiteUrl)}`),
+  
+  // anyrouter.top GitHub OAuth登录快捷方式
+  oauthLoginAnyrouter: (githubAccountId: number) =>
+    api.post(`/github/oauth-login-anyrouter/${githubAccountId}`),
+};
+
+// 定时任务接口
+export const scheduledTasksAPI = {
+  // 获取所有定时任务
+  getTasks: () =>
+    api.get('/scheduled-tasks/tasks'),
+  
+  // 获取任务详情
+  getTask: (id: number) =>
+    api.get(`/scheduled-tasks/tasks/${id}`),
+  
+  // 创建GitHub OAuth定时任务
+  createGitHubOAuthTask: (data: {
+    name: string;
+    description?: string;
+    cron_expression: string;
+    github_account_ids: number[];
+    target_website?: string;
+    retry_count?: number;
+    is_active?: boolean;
+  }) =>
+    api.post('/scheduled-tasks/tasks/github-oauth', data),
+  
+  // 更新任务
+  updateTask: (id: number, data: {
+    name?: string;
+    description?: string;
+    cron_expression?: string;
+    task_params?: any;
+    is_active?: boolean;
+  }) =>
+    api.put(`/scheduled-tasks/tasks/${id}`, data),
+  
+  // 删除任务
+  deleteTask: (id: number) =>
+    api.delete(`/scheduled-tasks/tasks/${id}`),
+  
+  // 手动执行任务
+  runTask: (id: number) =>
+    api.post(`/scheduled-tasks/tasks/${id}/run`),
+  
+  // 获取任务执行日志
+  getTaskLogs: (id: number, limit?: number) =>
+    api.get(`/scheduled-tasks/tasks/${id}/logs`, { params: { limit } }),
+  
+  // 切换任务状态
+  toggleTask: (id: number) =>
+    api.post(`/scheduled-tasks/tasks/${id}/toggle`),
 };
 
 // API网站接口

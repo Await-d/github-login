@@ -32,7 +32,8 @@ import {
   FilterOutlined,
   SettingOutlined,
   GithubOutlined,
-  GlobalOutlined
+  GlobalOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import { githubAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -40,6 +41,7 @@ import GitHubAccountForm from '../components/GitHubAccountForm';
 import BatchImportModal from '../components/BatchImportModal';
 import UserSettingsModal from '../components/UserSettingsModal';
 import ApiWebsiteManagement from './ApiWebsiteManagement';
+import ScheduledTasksManagement from './ScheduledTasksManagement';
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -714,6 +716,16 @@ const Dashboard: React.FC = () => {
                 </span>
               ),
               children: <ApiWebsiteManagement />
+            },
+            {
+              key: 'scheduled-tasks',
+              label: (
+                <span>
+                  <ClockCircleOutlined />
+                  定时任务管理
+                </span>
+              ),
+              children: <ScheduledTasksManagement />
             }
           ]}
         />
