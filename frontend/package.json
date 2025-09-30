@@ -1,6 +1,6 @@
 {
   "name": "github-manager-frontend",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "dependencies": {
     "@ant-design/icons": "^5.2.6",

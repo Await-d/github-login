@@ -1,6 +1,7 @@
 """
 GitHub账号管理系统 - FastAPI后端
-Version: 1.0.5
+Version: 1.0.6
+支持定时任务和浏览器自动化
 """
 
 from fastapi import FastAPI, HTTPException
