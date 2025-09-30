@@ -21,7 +21,7 @@ FROM python:3.12-slim
 # 设置工作目录
 WORKDIR /app
 
-# 安装系统依赖
+# 安装系统依赖和 Chromium（支持多架构）
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -29,7 +29,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     curl \
     wget \
-    gnupg \
+    chromium \
+    chromium-driver \
     ca-certificates \
     fonts-liberation \
     libasound2 \
@@ -52,15 +53,11 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Google Chrome（使用新的 GPG 密钥方法）
-RUN wget -q -O /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb \
-    && apt-get update \
-    && apt-get install -y /tmp/google-chrome.deb \
-    && rm /tmp/google-chrome.deb \
-    && rm -rf /var/lib/apt/lists/*
+# 创建 google-chrome 符号链接，让 Selenium 可以找到浏览器
+RUN ln -s /usr/bin/chromium /usr/bin/google-chrome
 
 # 设置 Chrome 环境变量
-ENV CHROME_BIN=/usr/bin/google-chrome
+ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 # 复制requirements.txt
