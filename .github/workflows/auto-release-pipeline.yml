@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# 自动取消之前未完成的工作流
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   packages: write
