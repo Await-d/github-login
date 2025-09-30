@@ -29,13 +29,23 @@ except ValueError:
 
 
 def hash_password(password: str) -> str:
-    """哈希密码"""
-    return pwd_context.hash(password)
+    """
+    哈希密码
+    注意：bcrypt有72字节的限制，超过的部分会被截断
+    """
+    # 截断密码到72字节以符合bcrypt限制
+    password_bytes = password.encode('utf-8')[:72]
+    return pwd_context.hash(password_bytes)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """验证密码"""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    验证密码
+    注意：bcrypt有72字节的限制，超过的部分会被截断
+    """
+    # 截断密码到72字节以符合bcrypt限制
+    password_bytes = plain_password.encode('utf-8')[:72]
+    return pwd_context.verify(password_bytes, hashed_password)
 
 
 def encrypt_data(data: str) -> str:
