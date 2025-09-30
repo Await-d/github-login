@@ -1405,7 +1405,7 @@ class BrowserSimulator:
                         
                         if 'github.com' not in current_url:
                             print(f"✅ 从2FA设置页面成功重定向回原网站: {current_url}")
-                            
+
                             # 收集会话数据
                             session_data = {
                                 "final_url": current_url,
@@ -1414,7 +1414,28 @@ class BrowserSimulator:
                                 "oauth_completed": True,
                                 "via_2fa_checkup": True
                             }
-                            
+
+                            # 提取余额信息
+                            try:
+                                print("🔍 开始提取账户余额信息...")
+                                balance_extractor = BalanceExtractor(self.driver)
+                                balance_result = balance_extractor.extract_balance()
+
+                                if balance_result['success']:
+                                    session_data['balance'] = balance_result['balance']
+                                    session_data['balance_currency'] = balance_result['currency']
+                                    session_data['balance_raw_text'] = balance_result['raw_text']
+                                    print(f"✅ 成功提取余额信息: {balance_result['balance']} {balance_result['currency']}")
+                                else:
+                                    session_data['balance'] = None
+                                    session_data['balance_extraction_error'] = balance_result.get('error', '未知错误')
+                                    print(f"⚠️ 余额提取失败: {balance_result.get('error', '未知错误')}")
+
+                            except Exception as balance_error:
+                                session_data['balance'] = None
+                                session_data['balance_extraction_error'] = str(balance_error)
+                                print(f"❌ 余额提取异常: {str(balance_error)}")
+
                             # 检查是否成功登录（不在登录页面）
                             if '/login' not in current_url:
                                 return True, "GitHub OAuth登录成功（经由2FA设置检查）", session_data
@@ -1511,6 +1532,28 @@ class BrowserSimulator:
                                                 "oauth_completed": True,
                                                 "via_oauth_authorize": True
                                             }
+
+                                            # 提取余额信息
+                                            try:
+                                                print("🔍 开始提取账户余额信息...")
+                                                balance_extractor = BalanceExtractor(self.driver)
+                                                balance_result = balance_extractor.extract_balance()
+
+                                                if balance_result['success']:
+                                                    session_data['balance'] = balance_result['balance']
+                                                    session_data['balance_currency'] = balance_result['currency']
+                                                    session_data['balance_raw_text'] = balance_result['raw_text']
+                                                    print(f"✅ 成功提取余额信息: {balance_result['balance']} {balance_result['currency']}")
+                                                else:
+                                                    session_data['balance'] = None
+                                                    session_data['balance_extraction_error'] = balance_result.get('error', '未知错误')
+                                                    print(f"⚠️ 余额提取失败: {balance_result.get('error', '未知错误')}")
+
+                                            except Exception as balance_error:
+                                                session_data['balance'] = None
+                                                session_data['balance_extraction_error'] = str(balance_error)
+                                                print(f"❌ 余额提取异常: {str(balance_error)}")
+
                                             return True, "OAuth授权成功完成", session_data
                                         else:
                                             print(f"⚠️ 授权后仍在GitHub: {final_url}")
