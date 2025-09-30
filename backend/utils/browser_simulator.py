@@ -941,61 +941,68 @@ class BrowserSimulator:
                 
                 # 查找并点击验证按钮
                 verify_button = None
-                verify_selectors = [
-                    "button[type='submit']",
-                    "input[type='submit']",
-                    "button:contains('Verify')",
-                    "button:contains('Submit')", 
-                    "button:contains('Continue')",
-                    "input[value*='Verify']",
-                    "button.btn-primary",
-                    "button[class*='btn-primary']"
-                ]
                 
-                for selector in verify_selectors:
-                    try:
-                        if ':contains(' in selector:
-                            # 使用XPath处理包含文本的选择器
-                            xpath_selector = selector.replace('button:contains(', '//button[contains(text(),').replace("')", '")]')
-                            elements = self.driver.find_elements(By.XPATH, xpath_selector)
-                        else:
-                            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                            
-                        for elem in elements:
-                            if elem.is_displayed() and elem.is_enabled():
-                                verify_button = elem
-                                print(f"✅ 找到2FA验证按钮: {selector}")
+                # 方法1: 使用JavaScript查找按钮（最可靠）
+                try:
+                    verify_button = self.driver.execute_script("""
+                        var buttons = document.querySelectorAll('button, input[type="submit"]');
+                        for (var i = 0; i < buttons.length; i++) {
+                            var btn = buttons[i];
+                            var text = (btn.textContent || btn.innerText || btn.value || '').trim().toLowerCase();
+                            if ((text.includes('verify') || text.includes('submit') || text.includes('continue')) 
+                                && btn.offsetParent !== null) {
+                                return btn;
+                            }
+                        }
+                        return null;
+                    """)
+                    if verify_button:
+                        print("✅ 找到2FA验证按钮 (JavaScript)")
+                except Exception as e:
+                    print(f"⚠️ JavaScript查找失败: {str(e)[:50]}")
+                
+                # 方法2: 如果JavaScript失败，使用传统选择器
+                if not verify_button:
+                    verify_selectors = [
+                        "button[type='submit']",
+                        "input[type='submit']",
+                        "button:contains('Verify')",
+                        "button:contains('Submit')", 
+                        "button:contains('Continue')",
+                        "input[value*='Verify']",
+                        "button.btn-primary",
+                        "button[class*='btn-primary']"
+                    ]
+                    
+                    for selector in verify_selectors:
+                        try:
+                            if ':contains(' in selector:
+                                # 使用XPath处理包含文本的选择器
+                                text = selector.split("'")[1]
+                                xpath_selector = f"//button[contains(text(),'{text}')]"
+                                elements = self.driver.find_elements(By.XPATH, xpath_selector)
+                            else:
+                                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                                
+                            for elem in elements:
+                                if elem.is_displayed() and elem.is_enabled():
+                                    verify_button = elem
+                                    print(f"✅ 找到2FA验证按钮: {selector}")
+                                    break
+                            if verify_button:
                                 break
-                        if verify_button:
-                            break
-                    except Exception as e:
-                        print(f"⚠️ 测试验证按钮选择器失败 '{selector}': {e}")
-                        continue
+                        except Exception as e:
+                            # 只打印非预期的错误
+                            if "invalid selector" not in str(e).lower() and "xpath" not in str(e).lower():
+                                print(f"⚠️ 选择器测试失败 '{selector}'")
+                            continue
                 
                 if verify_button:
                     print("✅ 点击2FA验证按钮")
                     self.safe_click(verify_button)
                     time.sleep(5)
                 else:
-                    print("⚠️ 未找到2FA验证按钮，尝试按回车")
-                    try:
-                        # 重新找到TOTP输入框以避免StaleElementReferenceException
-                        totp_element_fresh = self.driver.find_element(By.CSS_SELECTOR, "input[class*='otp']")
-                        totp_element_fresh.send_keys(Keys.RETURN)
-                        print("✅ 成功发送回车键到2FA输入框")
-                    except Exception as e:
-                        print(f"⚠️ 发送回车键失败: {e}")
-                        # 尝试其他方法提交表单
-                        try:
-                            # 查找并点击任何submit按钮
-                            submit_buttons = self.driver.find_elements(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
-                            for btn in submit_buttons:
-                                if btn.is_displayed() and btn.is_enabled():
-                                    print("🖱️ 找到submit按钮，尝试点击")
-                                    self.safe_click(btn)
-                                    break
-                        except Exception as e2:
-                            print(f"⚠️ 点击submit按钮也失败: {e2}")
+                    print("⚠️ 未找到2FA验证按钮，但验证码已输入，等待页面自动处理")
                     time.sleep(5)
             
             # 等待OAuth授权页面或重定向
@@ -1099,7 +1106,11 @@ class BrowserSimulator:
                             try:
                                 if ':contains(' in selector:
                                     # 使用xpath处理contains
-                                    xpath_selector = selector.replace('button:contains(', '//button[contains(text(),').replace('a:contains(', '//a[contains(text(),').replace("')", '")]')
+                                    text = selector.split("'")[1]
+                                    if selector.startswith('button'):
+                                        xpath_selector = f"//button[contains(text(),'{text}')]"
+                                    else:
+                                        xpath_selector = f"//a[contains(text(),'{text}')]"
                                     elements = self.driver.find_elements(By.XPATH, xpath_selector)
                                 else:
                                     elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
@@ -1326,11 +1337,14 @@ class BrowserSimulator:
                                                 "input[value='Done']",
                                                 "a:contains('Done')"
                                             ]
-                                            
                                             for selector in done_selectors:
                                                 try:
                                                     if ':contains(' in selector:
-                                                        xpath_selector = selector.replace('button:contains(', '//button[contains(text(),').replace('a:contains(', '//a[contains(text(),').replace("')", '")]')
+                                                        text = selector.split("'")[1]
+                                                        if selector.startswith('button'):
+                                                            xpath_selector = f"//button[contains(text(),'{text}')]"
+                                                        else:
+                                                            xpath_selector = f"//a[contains(text(),'{text}')]"
                                                         elements = self.driver.find_elements(By.XPATH, xpath_selector)
                                                     else:
                                                         elements = self.driver.find_elements(By.CSS_SELECTOR, selector)

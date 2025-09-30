@@ -22,6 +22,7 @@ import {
 import {
   PlusOutlined,
   DeleteOutlined,
+  EditOutlined,
   PlayCircleOutlined,
   PauseCircleOutlined,
   ClockCircleOutlined,
@@ -79,7 +80,10 @@ const ScheduledTasksManagement: React.FC = () => {
   const [logsModalVisible, setLogsModalVisible] = useState(false);
   const [currentTaskLogs, setCurrentTaskLogs] = useState<TaskLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
 
   useEffect(() => {
     loadTasks();
@@ -203,6 +207,50 @@ const ScheduledTasksManagement: React.FC = () => {
     }
   };
 
+  const handleEditTask = (task: ScheduledTask) => {
+    setEditingTask(task);
+    editForm.setFieldsValue({
+      name: task.name,
+      description: task.description,
+      cron_expression: task.cron_expression,
+      github_account_ids: task.task_params?.github_account_ids || [],
+      target_website: task.task_params?.target_website || 'https://anyrouter.top',
+      retry_count: task.task_params?.retry_count || 3,
+      is_active: task.is_active
+    });
+    setEditModalVisible(true);
+  };
+
+  const handleUpdateTask = async (values: any) => {
+    if (!editingTask) return;
+
+    try {
+      const response = await scheduledTasksAPI.updateTask(editingTask.id, {
+        name: values.name,
+        description: values.description,
+        cron_expression: values.cron_expression,
+        task_params: {
+          github_account_ids: values.github_account_ids,
+          target_website: values.target_website || 'https://anyrouter.top',
+          retry_count: values.retry_count || 3
+        },
+        is_active: values.is_active !== false
+      });
+
+      if (response.data.success) {
+        message.success('定时任务更新成功');
+        setEditModalVisible(false);
+        setEditingTask(null);
+        editForm.resetFields();
+        loadTasks();
+      } else {
+        message.error('更新失败: ' + response.data.message);
+      }
+    } catch (error: any) {
+      message.error('更新失败: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
   // 预设的cron表达式
   const cronPresets = [
     { label: '每天上午9点', value: '0 9 * * *' },
@@ -319,6 +367,13 @@ const ScheduledTasksManagement: React.FC = () => {
               size="small"
               icon={<HistoryOutlined />}
               onClick={() => handleViewLogs(record)}
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditTask(record)}
             />
           </Tooltip>
           <Popconfirm
@@ -587,6 +642,125 @@ const ScheduledTasksManagement: React.FC = () => {
               </Button>
               <Button type="primary" htmlType="submit">
                 创建任务
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑任务模态框 */}
+      <Modal
+        title="编辑定时任务"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingTask(null);
+          editForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={handleUpdateTask}
+        >
+          <Form.Item
+            name="name"
+            label="任务名称"
+            rules={[{ required: true, message: '请输入任务名称' }]}
+          >
+            <Input placeholder="例如：每日anyrouter登录" />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="任务描述"
+          >
+            <TextArea placeholder="任务描述信息" rows={2} />
+          </Form.Item>
+
+          <Form.Item
+            name="cron_expression"
+            label="执行计划"
+            rules={[{ required: true, message: '请选择或输入cron表达式' }]}
+          >
+            <Select
+              placeholder="选择预设计划或输入自定义cron表达式"
+              allowClear
+              showSearch
+            >
+              {cronPresets.map(preset => (
+                <Option key={preset.value} value={preset.value}>
+                  {preset.label} ({preset.value})
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="github_account_ids"
+            label="选择GitHub账号"
+            rules={[{ required: true, message: '请选择至少一个GitHub账号' }]}
+          >
+            <Select
+              mode="multiple"
+              placeholder="选择要执行登录的GitHub账号"
+              showSearch
+              optionFilterProp="children"
+            >
+              {githubAccounts.map(account => (
+                <Option key={account.id} value={account.id}>
+                  {account.username}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="target_website"
+                label="目标网站"
+              >
+                <Input placeholder="https://anyrouter.top" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="retry_count"
+                label="失败重试次数"
+              >
+                <Select>
+                  <Option value={1}>1次</Option>
+                  <Option value={2}>2次</Option>
+                  <Option value={3}>3次</Option>
+                  <Option value={5}>5次</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="is_active"
+            valuePropName="checked"
+          >
+            <Checkbox>启用任务</Checkbox>
+          </Form.Item>
+
+          <Divider />
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => {
+                setEditModalVisible(false);
+                setEditingTask(null);
+                editForm.resetFields();
+              }}>
+                取消
+              </Button>
+              <Button type="primary" htmlType="submit">
+                保存更新
               </Button>
             </Space>
           </Form.Item>
