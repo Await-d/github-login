@@ -36,7 +36,7 @@ import {
   ClockCircleOutlined
 } from '@ant-design/icons';
 import { githubAPI } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 import GitHubAccountForm from '../components/GitHubAccountForm';
 import BatchImportModal from '../components/BatchImportModal';
 import UserSettingsModal from '../components/UserSettingsModal';
