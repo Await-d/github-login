@@ -1373,14 +1373,14 @@ class BrowserSimulator:
                     except Exception as e:
                         print(f"⚠️ 跳过2FA检查处理出错: {e}")
                     
-                    # 等待页面自动处理和重定向 - 增加等待时间
-                    for i in range(150):  # 等待150秒，2FA设置检查需要更长时间
+                    # 等待页面自动处理和重定向 - 最多等待20秒
+                    for i in range(20):  # 等待20秒
                         time.sleep(1)
                         current_url = self.driver.current_url
-                        
-                        # 每10秒输出一次等待状态
-                        if i > 0 and i % 10 == 0:
-                            print(f"⏳ 等待2FA设置检查自动重定向... ({i}/150秒)")
+
+                        # 每5秒输出一次等待状态
+                        if i > 0 and i % 5 == 0:
+                            print(f"⏳ 等待2FA设置检查自动重定向... ({i}/20秒)")
                         
                         if 'github.com' not in current_url:
                             print(f"✅ 从2FA设置页面成功重定向回原网站: {current_url}")
