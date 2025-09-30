@@ -1247,32 +1247,53 @@ class BrowserSimulator:
                                     # 步骤7d: 输入验证码后截图
                                     self.take_screenshot("07d_verification_code_entered", "输入2FA设置验证码")
                                     
-                                    # 查找并点击验证按钮
+                                    # 查找并点击验证按钮 - 使用更可靠的方法
                                     verify_button = None
-                                    verify_selectors = [
-                                        "button:contains('Verify')",
-                                        "input[type='submit'][value*='Verify']",
-                                        ".btn-primary",
-                                        "button.btn-primary"
-                                    ]
-                                    
-                                    for selector in verify_selectors:
-                                        try:
-                                            if ':contains(' in selector:
-                                                xpath_selector = selector.replace('button:contains(', '//button[contains(text(),').replace("')", '")]')
-                                                elements = self.driver.find_elements(By.XPATH, xpath_selector)
-                                            else:
-                                                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                                                
-                                            for elem in elements:
-                                                if elem.is_displayed() and elem.is_enabled():
-                                                    verify_button = elem
-                                                    print(f"✅ 找到验证按钮: {selector}")
+
+                                    # 方法1: 使用JavaScript查找Verify按钮
+                                    try:
+                                        verify_button = self.driver.execute_script("""
+                                            var buttons = document.querySelectorAll('button, input[type="submit"]');
+                                            for (var i = 0; i < buttons.length; i++) {
+                                                var btn = buttons[i];
+                                                var text = (btn.textContent || btn.innerText || btn.value || '').trim();
+                                                if (text.toLowerCase().includes('verify') && btn.offsetParent !== null) {
+                                                    return btn;
+                                                }
+                                            }
+                                            return null;
+                                        """)
+                                        if verify_button:
+                                            print("✅ 找到验证按钮: Verify (JavaScript查找)")
+                                    except Exception as e:
+                                        print(f"⚠️ JavaScript查找按钮失败: {e}")
+
+                                    # 方法2: 如果JavaScript失败，使用传统选择器
+                                    if not verify_button:
+                                        verify_selectors = [
+                                            "//button[contains(text(), 'Verify')]",
+                                            "//button[contains(., 'Verify')]",
+                                            "//input[@type='submit' and contains(@value, 'Verify')]",
+                                            ".btn-primary",
+                                            "button.btn-primary"
+                                        ]
+
+                                        for selector in verify_selectors:
+                                            try:
+                                                if selector.startswith('//'):
+                                                    elements = self.driver.find_elements(By.XPATH, selector)
+                                                else:
+                                                    elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+
+                                                for elem in elements:
+                                                    if elem.is_displayed() and elem.is_enabled():
+                                                        verify_button = elem
+                                                        print(f"✅ 找到验证按钮: {selector}")
+                                                        break
+                                                if verify_button:
                                                     break
-                                            if verify_button:
-                                                break
-                                        except:
-                                            continue
+                                            except:
+                                                continue
                                     
                                     if verify_button:
                                         print("🖱️ 点击2FA设置验证按钮")
