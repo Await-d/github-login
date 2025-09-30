@@ -29,6 +29,18 @@ python-multipart==0.0.6
 # 环境配置
 python-dotenv==1.0.0
 
+# 定时任务和调度
+croniter==2.0.1
+pytz==2023.3
+APScheduler==3.10.4
+
+# 浏览器自动化
+selenium==4.15.2
+webdriver-manager==4.0.1
+
+# 系统监控
+psutil==5.9.6
+
 # 依赖的基础包
 typing-extensions>=4.0.0
 anyio>=3.7.0
