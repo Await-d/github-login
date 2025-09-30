@@ -222,12 +222,21 @@ class BrowserSimulator:
         })
         
         try:
-            service = ChromeService(ChromeDriverManager().install())
+            # 优先使用系统安装的 chromedriver
+            chromedriver_path = os.getenv('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
+
+            if os.path.exists(chromedriver_path):
+                print(f"✅ 使用系统 ChromeDriver: {chromedriver_path}")
+                service = ChromeService(executable_path=chromedriver_path)
+            else:
+                print("⚠️ 系统 ChromeDriver 不存在，使用 webdriver-manager 下载")
+                service = ChromeService(ChromeDriverManager().install())
+
             self.driver = webdriver.Chrome(service=service, options=options)
-            
+
             # 执行JavaScript来隐藏webdriver属性
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
+
         except Exception as e:
             print(f"Chrome driver设置失败: {e}")
             raise
