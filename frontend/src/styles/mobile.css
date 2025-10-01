@@ -1,0 +1,263 @@
+/* 移动端响应式样式 */
+
+/* 基础响应式断点 */
+@media (max-width: 768px) {
+  /* 全局字体大小调整 */
+  body {
+    font-size: 14px;
+  }
+
+  /* 登录表单移动端优化 */
+  .login-container {
+    padding: 16px !important;
+    min-height: 100vh !important;
+  }
+
+  .login-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Header 移动端优化 */
+  .ant-layout-header {
+    padding: 0 16px !important;
+    height: auto !important;
+    min-height: 64px !important;
+  }
+
+  .header-title {
+    font-size: 18px !important;
+    margin: 8px 0 !important;
+  }
+
+  .header-actions {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  /* 内容区域移动端优化 */
+  .ant-layout-content {
+    padding: 12px !important;
+  }
+
+  /* 统计卡片移动端优化 */
+  .ant-statistic-title {
+    font-size: 12px !important;
+  }
+
+  .ant-statistic-content {
+    font-size: 18px !important;
+  }
+
+  /* 表格移动端优化 */
+  .ant-table-wrapper {
+    overflow-x: auto !important;
+  }
+
+  .ant-table {
+    min-width: 600px !important;
+  }
+
+  .ant-table-thead > tr > th {
+    padding: 8px !important;
+    font-size: 12px !important;
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 8px !important;
+    font-size: 12px !important;
+  }
+
+  /* 按钮组移动端优化 */
+  .ant-space {
+    flex-wrap: wrap !important;
+  }
+
+  .ant-btn {
+    font-size: 12px !important;
+    height: 28px !important;
+    padding: 0 8px !important;
+  }
+
+  /* Card 移动端优化 */
+  .ant-card {
+    margin-bottom: 12px !important;
+  }
+
+  .ant-card-head {
+    padding: 12px !important;
+    min-height: auto !important;
+  }
+
+  .ant-card-head-title {
+    font-size: 16px !important;
+  }
+
+  .ant-card-body {
+    padding: 12px !important;
+  }
+
+  .ant-card-extra {
+    margin-left: 0 !important;
+    margin-top: 8px !important;
+  }
+
+  /* 搜索筛选区域移动端优化 */
+  .search-filter-row .ant-col {
+    margin-bottom: 8px !important;
+  }
+
+  /* Modal 移动端优化 */
+  .ant-modal {
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+  }
+
+  .ant-modal-body {
+    padding: 16px !important;
+  }
+
+  /* Form 移动端优化 */
+  .ant-form-item {
+    margin-bottom: 16px !important;
+  }
+
+  .ant-input,
+  .ant-input-password,
+  .ant-picker {
+    font-size: 14px !important;
+  }
+
+  /* Tabs 移动端优化 */
+  .ant-tabs-nav {
+    margin-bottom: 12px !important;
+  }
+
+  .ant-tabs-tab {
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+  }
+
+  /* Progress 移动端优化 */
+  .ant-progress-circle {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  /* 统计行移动端堆叠 */
+  .stats-row .ant-col {
+    margin-bottom: 12px !important;
+  }
+
+  /* TOTP Modal 移动端优化 */
+  .totp-token {
+    font-size: 20px !important;
+  }
+
+  /* 操作按钮堆叠 */
+  .action-buttons {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .action-buttons .ant-btn {
+    width: 100% !important;
+    margin-bottom: 8px !important;
+  }
+}
+
+/* 超小屏幕优化（手机竖屏） */
+@media (max-width: 480px) {
+  .ant-layout-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    padding: 12px !important;
+  }
+
+  .header-title {
+    font-size: 16px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .ant-table {
+    font-size: 11px !important;
+  }
+
+  /* 简化表格显示 */
+  .ant-table-tbody > tr > td {
+    white-space: nowrap !important;
+  }
+
+  /* 隐藏部分非关键列 */
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  /* TOTP验证码优化 */
+  .totp-token {
+    font-size: 18px !important;
+  }
+
+  .ant-statistic-content {
+    font-size: 16px !important;
+  }
+}
+
+/* 平板设备优化 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .ant-layout-content {
+    padding: 20px !important;
+  }
+
+  .stats-row .ant-col-6 {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+}
+
+/* 横屏手机优化 */
+@media (max-width: 768px) and (orientation: landscape) {
+  .login-container {
+    padding: 8px !important;
+  }
+
+  .ant-modal {
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* 通用移动端工具类 */
+.mobile-hidden {
+  display: none !important;
+}
+
+@media (min-width: 769px) {
+  .desktop-hidden {
+    display: none !important;
+  }
+}
+
+/* 移动端友好的间距 */
+.mobile-spacing {
+  padding: 12px !important;
+}
+
+.mobile-margin {
+  margin: 12px !important;
+}
+
+/* 移动端文字大小 */
+.mobile-text-sm {
+  font-size: 12px !important;
+}
+
+.mobile-text-md {
+  font-size: 14px !important;
+}
+
+.mobile-text-lg {
+  font-size: 16px !important;
+}

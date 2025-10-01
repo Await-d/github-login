@@ -47,8 +47,8 @@ const LoginForm: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+    <div className="login-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#f0f2f5' }}>
+      <Card className="login-card" style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={2}>GitHub账号管理系统</Title>
         </div>

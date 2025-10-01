@@ -533,12 +533,13 @@ const Dashboard: React.FC = () => {
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        flexWrap: 'wrap'
       }}>
-        <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+        <Title level={3} className="header-title" style={{ margin: 0, color: '#1890ff' }}>
           GitHub账号管理系统
         </Title>
-        <Space>
+        <Space className="header-actions">
           <Text>欢迎，{user?.username}</Text>
           <Button
             type="text"
@@ -572,8 +573,8 @@ const Dashboard: React.FC = () => {
               ),
               children: (
                 <div>
-                  <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-                    <Col span={6}>
+                  <Row gutter={[16, 16]} className="stats-row" style={{ marginBottom: 24 }}>
+                    <Col xs={12} sm={12} md={6} lg={6}>
                       <Card>
                         <Statistic
                           title="总账号数"
@@ -582,7 +583,7 @@ const Dashboard: React.FC = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={12} sm={12} md={6} lg={6}>
                       <Card>
                         <Statistic
                           title="筛选结果"
@@ -591,7 +592,7 @@ const Dashboard: React.FC = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={12} sm={12} md={6} lg={6}>
                       <Card>
                         <Statistic
                           title="今日创建"
@@ -600,7 +601,7 @@ const Dashboard: React.FC = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col xs={12} sm={12} md={6} lg={6}>
                       <Card>
                         <Statistic
                           title="技术栈"
@@ -614,7 +615,7 @@ const Dashboard: React.FC = () => {
                   <Card
                     title="GitHub账号列表"
                     extra={
-                      <Space>
+                      <Space className="action-buttons">
                         <Button
                           type="primary"
                           icon={<KeyOutlined />}
@@ -648,8 +649,8 @@ const Dashboard: React.FC = () => {
                   >
                     {/* 搜索和筛选区域 */}
                     <div style={{ marginBottom: 16 }}>
-                      <Row gutter={[16, 16]}>
-                        <Col span={8}>
+                      <Row gutter={[16, 16]} className="search-filter-row">
+                        <Col xs={24} sm={24} md={8} lg={8}>
                           <Search
                             placeholder="搜索GitHub用户名"
                             value={searchText}
@@ -660,7 +661,7 @@ const Dashboard: React.FC = () => {
                             allowClear
                           />
                         </Col>
-                        <Col span={8}>
+                        <Col xs={24} sm={24} md={8} lg={8}>
                           <RangePicker
                             placeholder={['开始日期', '结束日期']}
                             value={dateRange}
@@ -668,7 +669,7 @@ const Dashboard: React.FC = () => {
                             style={{ width: '100%' }}
                           />
                         </Col>
-                        <Col span={4}>
+                        <Col xs={12} sm={12} md={4} lg={4}>
                           <Select
                             placeholder="排序方式"
                             value={sortOrder}
@@ -679,7 +680,7 @@ const Dashboard: React.FC = () => {
                             <Option value="ascend">创建时间↑</Option>
                           </Select>
                         </Col>
-                        <Col span={4}>
+                        <Col xs={12} sm={12} md={4} lg={4}>
                           <Button
                             icon={<FilterOutlined />}
                             onClick={handleResetFilters}
@@ -791,7 +792,7 @@ const Dashboard: React.FC = () => {
                 <div>
                   <Text type="secondary">验证码</Text>
                   <div style={{ margin: '10px 0' }}>
-                    <Text code style={{ fontSize: '24px', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                    <Text code className="totp-token" style={{ fontSize: '24px', fontFamily: 'monospace', fontWeight: 'bold' }}>
                       {formatTOTPToken(singleTotpData.token)}
                     </Text>
                     <Button
