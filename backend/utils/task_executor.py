@@ -596,7 +596,7 @@ def execute_github_oauth_with_browser_simulator(
             
             # 在OAuth窗口中执行登录
             login_success, login_message, session_data = browser.perform_github_login_in_oauth_window(
-                github_username, github_password, totp_secret
+                github_username, github_password, totp_secret, target_website
             )
             
             return login_success, login_message, session_data

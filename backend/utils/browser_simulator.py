@@ -610,7 +610,7 @@ class BrowserSimulator:
             print(f"❌ {error_msg}")
             return False, error_msg
     
-    def perform_github_login_in_oauth_window(self, username: str, password: str, totp_secret: str) -> Tuple[bool, str, Dict]:
+    def perform_github_login_in_oauth_window(self, username: str, password: str, totp_secret: str, target_website: str = None) -> Tuple[bool, str, Dict]:
         """
         在GitHub OAuth窗口中执行登录
         这是对handle_github_oauth_flow的补充，处理实际的GitHub登录过程
