@@ -10,6 +10,9 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     color: #333;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .page {
@@ -62,6 +65,9 @@ body {
     cursor: pointer;
     transition: all 0.3s;
     font-weight: 500;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 .tab-btn.active {
@@ -92,6 +98,8 @@ body {
     border-radius: 8px;
     font-size: 16px;
     transition: border-color 0.3s;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .form-group input:focus {
@@ -106,12 +114,6 @@ body {
     gap: 20px;
 }
 
-@media (max-width: 768px) {
-    .form-row {
-        grid-template-columns: 1fr;
-    }
-}
-
 /* 按钮样式 */
 .btn-primary, .btn-secondary {
     padding: 12px 24px;
@@ -124,6 +126,9 @@ body {
     text-decoration: none;
     display: inline-block;
     text-align: center;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 .btn-primary {
@@ -150,10 +155,25 @@ body {
 .btn-danger {
     background: #e53e3e;
     color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 .btn-danger:hover {
     background: #c53030;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
 }
 
 /* 主页面样式 */
@@ -225,6 +245,7 @@ body {
     margin-bottom: 15px;
     transition: all 0.3s;
     align-items: center;
+    background: #fafbfc;
 }
 
 .account-item:hover {
@@ -252,23 +273,6 @@ body {
     font-size: 14px;
 }
 
-@media (max-width: 768px) {
-    .account-item {
-        grid-template-columns: 1fr;
-        text-align: center;
-    }
-    
-    .section-header {
-        flex-direction: column;
-        gap: 15px;
-        align-items: stretch;
-    }
-    
-    .section-actions {
-        justify-content: center;
-    }
-}
-
 /* TOTP样式 */
 .totp-list {
     display: grid;
@@ -283,6 +287,7 @@ body {
     text-align: center;
     border: 2px solid #e2e8f0;
     transition: all 0.3s;
+    cursor: default;
 }
 
 .totp-item:hover {
@@ -351,6 +356,31 @@ body {
 
 .message.info {
     background: #4299e1;
+}
+
+/* 移动端平滑滚动优化 */
+html {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+}
+
+/* 移动端焦点样式优化 */
+button:focus-visible,
+input:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* 防止移动端双击缩放 */
+button,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.tab-btn {
+    -webkit-touch-callout: none;
 }
 
 @keyframes slideIn {
@@ -422,20 +452,194 @@ body {
 }
 
 /* 响应式设计 */
-@media (max-width: 480px) {
-    .main-content {
+
+/* 大手机和小平板 (≤768px) */
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .account-item {
+        grid-template-columns: 1fr;
+        gap: 15px;
+        text-align: left;
+    }
+    
+    .account-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+    
+    .section-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 10px;
+    }
+}
+
+/* 中等手机 (≤640px) */
+@media (max-width: 640px) {
+    /* Header 移动端优化 */
+    .header {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
         padding: 15px;
     }
     
-    .add-account-section, .accounts-section, .totp-section {
-        padding: 20px;
+    .header h1 {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+    
+    .user-info {
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    /* 消息提示移动端优化 */
+    .message-container {
+        left: 10px;
+        right: 10px;
+        top: 10px;
+    }
+    
+    .message {
+        min-width: auto;
+        width: 100%;
+    }
+    
+    /* 登录页面优化 */
+    .login-container h1 {
+        font-size: 2rem;
+        margin-bottom: 20px;
     }
     
     .login-form {
-        padding: 25px;
+        padding: 30px 25px;
+    }
+    
+    /* Section 间距优化 */
+    .add-account-section, .accounts-section, .totp-section {
+        padding: 20px 15px;
+        margin-bottom: 20px;
+    }
+    
+    .main-content {
+        padding: 20px 15px;
+    }
+    
+    /* TOTP 网格优化 */
+    .totp-list {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    /* 按钮组全宽 */
+    .section-actions button,
+    .account-actions button {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .section-actions {
+        grid-template-columns: 1fr;
+    }
+    
+    /* 模态框优化 */
+    .modal-content {
+        width: 95%;
+        padding: 25px 20px;
+    }
+    
+    .modal-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .modal-actions button {
+        width: 100%;
+    }
+}
+
+/* 小手机 (≤480px) */
+@media (max-width: 480px) {
+    /* 登录标题进一步缩小 */
+    .login-container h1 {
+        font-size: 1.75rem;
+    }
+    
+    .login-form {
+        padding: 25px 20px;
+    }
+    
+    /* 按钮最小触摸尺寸 */
+    .btn-primary, .btn-secondary, .btn-danger {
+        min-height: 44px;
+        padding: 12px 20px;
+    }
+    
+    /* Tab 按钮触摸优化 */
+    .tab-btn {
+        min-height: 44px;
+        padding: 14px 12px;
+    }
+    
+    /* Section 标题字体 */
+    .section-header h2 {
+        font-size: 1.25rem;
+    }
+    
+    /* TOTP 验证码 */
+    .totp-code {
+        font-size: 1.5rem;
+    }
+    
+    /* 账号项内边距 */
+    .account-item {
+        padding: 15px;
+    }
+    
+    .account-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .account-actions button {
+        width: 100%;
+    }
+}
+
+/* 超小屏幕 (≤360px) */
+@media (max-width: 360px) {
+    .login-container h1 {
+        font-size: 1.5rem;
+    }
+    
+    .header h1 {
+        font-size: 1.25rem;
+    }
+    
+    .login-form {
+        padding: 20px 15px;
+    }
+    
+    .add-account-section, .accounts-section, .totp-section {
+        padding: 15px 10px;
+    }
+    
+    .main-content {
+        padding: 15px 10px;
     }
     
     .totp-code {
-        font-size: 1.5rem;
+        font-size: 1.25rem;
     }
 }
