@@ -5,6 +5,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/LoginForm';
 import Dashboard from './pages/Dashboard';
 import 'antd/dist/reset.css';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -24,11 +30,26 @@ const AppContent: React.FC = () => {
 
   return (
     <ConfigProvider locale={zhCN}>
-      {isAuthenticated ? (
-        <Dashboard />
-      ) : (
-        <LoginForm />
-      )}
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginForm />
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />
+          }
+        />
+      </Routes>
     </ConfigProvider>
   );
 };
@@ -36,7 +57,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
     </AuthProvider>
   );
 };

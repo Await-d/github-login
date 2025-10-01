@@ -26,7 +26,12 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const requestUrl: string = error.config?.url || '';
+
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+
+    if (status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       // 重新加载页面回到登录状态
