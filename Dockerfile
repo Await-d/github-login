@@ -75,10 +75,11 @@ COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
 # 设置环境变量
 ENV PYTHONPATH=/app/backend
-ENV PORT=8000
+ENV PORT=3000
+ENV TZ=Asia/Shanghai
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 3000
 
 # 启动命令
 CMD ["python", "/app/backend/app/main.py"]

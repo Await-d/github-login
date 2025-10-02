@@ -8,6 +8,7 @@ services:
       - "10202:3000"  # 映射外部10202端口到内部3000端口
     environment:
       - PORT=3000
+      - TZ=Asia/Shanghai
       - DATABASE_URL=sqlite:///./data/github_manager.db
       - ENCRYPTION_KEY=Z2l0aHViX21hbmFnZXJfc2VjcmV0X2tleV8zMmJ5dGU=
       - CREATE_DEFAULT_ADMIN=true

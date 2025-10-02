@@ -20,21 +20,100 @@ backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, backend_dir)
 
 from routes import auth, github, api_website, scheduled_tasks
-from models.database import init_db
+from models.database import init_db, get_db
+from utils.task_scheduler import task_scheduler
+from utils.task_executor import execute_task
+import asyncio
+from datetime import datetime
+
+
+# 全局变量用于控制后台任务
+background_scheduler_task = None
+scheduler_running = False
+
+
+async def task_scheduler_loop():
+    """后台任务调度器循环"""
+    global scheduler_running
+    scheduler_running = True
+
+    print("⏰ 定时任务调度器已启动")
+
+    while scheduler_running:
+        try:
+            # 获取数据库会话
+            db = next(get_db())
+
+            try:
+                # 获取待执行的任务
+                pending_tasks = task_scheduler.get_pending_tasks(db, tolerance_seconds=30)
+
+                if pending_tasks:
+                    print(f"📋 发现 {len(pending_tasks)} 个待执行任务")
+
+                    # 执行每个待执行的任务
+                    for task in pending_tasks:
+                        try:
+                            print(f"🚀 执行任务: {task.name} (ID: {task.id})")
+                            success, result = await execute_task(task, db)
+
+                            if success:
+                                print(f"✅ 任务 {task.name} 执行成功: {result}")
+                            else:
+                                print(f"❌ 任务 {task.name} 执行失败: {result}")
+                        except Exception as e:
+                            print(f"❌ 执行任务 {task.name} 时发生异常: {e}")
+                            import traceback
+                            traceback.print_exc()
+            finally:
+                db.close()
+
+            # 每30秒检查一次
+            await asyncio.sleep(30)
+
+        except Exception as e:
+            print(f"⚠️ 任务调度器循环异常: {e}")
+            import traceback
+            traceback.print_exc()
+            # 发生异常后等待一段时间再继续
+            await asyncio.sleep(60)
+
+    print("⏰ 定时任务调度器已停止")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用启动和关闭时的生命周期管理"""
+    global background_scheduler_task, scheduler_running
+
     # 启动时初始化数据库
     print("🚀 初始化数据库...")
     init_db()
     print("✅ 数据库初始化完成")
-    
+
+    # 启动后台任务调度器
+    print("🚀 启动后台任务调度器...")
+    background_scheduler_task = asyncio.create_task(task_scheduler_loop())
+    print("✅ 后台任务调度器已启动")
+
     yield
-    
+
     # 关闭时的清理工作
-    print("🛑 应用关闭")
+    print("🛑 正在关闭应用...")
+
+    # 停止后台任务调度器
+    print("🛑 停止后台任务调度器...")
+    scheduler_running = False
+
+    if background_scheduler_task:
+        background_scheduler_task.cancel()
+        try:
+            await background_scheduler_task
+        except asyncio.CancelledError:
+            pass
+
+    print("✅ 后台任务调度器已停止")
+    print("🛑 应用已关闭")
 
 
 # 创建FastAPI应用
