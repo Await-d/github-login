@@ -20,14 +20,17 @@ def calculate_next_run_time(cron_expression: str, tz: str = "Asia/Shanghai", fro
     Returns:
         下次执行的时间
     """
-    if from_time is None:
-        from_time = datetime.now()
-    
     # 设置时区
     timezone_obj = pytz.timezone(tz)
-    if from_time.tzinfo is None:
+    
+    if from_time is None:
+        # 直接获取指定时区的当前时间，避免时区转换错误
+        from_time = datetime.now(timezone_obj)
+    elif from_time.tzinfo is None:
+        # 如果传入的时间没有时区信息，将其本地化到指定时区
         from_time = timezone_obj.localize(from_time)
     else:
+        # 如果已有时区信息，转换到指定时区
         from_time = from_time.astimezone(timezone_obj)
     
     # 使用croniter计算下次执行时间
