@@ -8,7 +8,8 @@ import {
   ClockCircleOutlined,
   GlobalOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  FolderOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -41,6 +42,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
           key: '/github/accounts',
           label: '账号管理',
           onClick: () => navigate('/github/accounts')
+        },
+        {
+          key: '/github/groups',
+          icon: <FolderOutlined />,
+          label: '分组管理',
+          onClick: () => navigate('/github/groups')
         },
         {
           key: '/github/repositories',

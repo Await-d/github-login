@@ -27,9 +27,10 @@ import {
   ImportOutlined,
   StarOutlined,
   GithubOutlined,
-  StopOutlined
+  StopOutlined,
+  EditOutlined
 } from '@ant-design/icons';
-import { repositoryStarAPI, githubAPI } from '../services/api';
+import { repositoryStarAPI, githubAPI, githubGroupsAPI } from '../services/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -51,6 +52,14 @@ interface RepositoryStarTask {
 interface GitHubAccount {
   id: number;
   username: string;
+  group_id?: number;
+}
+
+interface GitHubGroup {
+  id: number;
+  name: string;
+  color: string | null;
+  account_count: number;
 }
 
 interface ExecutionRecord {
@@ -66,13 +75,20 @@ interface ExecutionRecord {
 const RepositoryStarManagement: React.FC = () => {
   const [tasks, setTasks] = useState<RepositoryStarTask[]>([]);
   const [githubAccounts, setGithubAccounts] = useState<GitHubAccount[]>([]);
+  const [groups, setGroups] = useState<GitHubGroup[]>([]);
   const [loading, setLoading] = useState(false);
   
   // 添加任务对话框
   const [addTaskVisible, setAddTaskVisible] = useState(false);
   const [addTaskForm] = Form.useForm();
   const [addTaskLoading, setAddTaskLoading] = useState(false);
-  
+
+  // 编辑任务对话框
+  const [editTaskVisible, setEditTaskVisible] = useState(false);
+  const [editTaskForm] = Form.useForm();
+  const [editTaskLoading, setEditTaskLoading] = useState(false);
+  const [editingTask, setEditingTask] = useState<RepositoryStarTask | null>(null);
+
   // 批量导入对话框
   const [batchImportVisible, setBatchImportVisible] = useState(false);
   const [batchImportForm] = Form.useForm();
@@ -84,9 +100,14 @@ const RepositoryStarManagement: React.FC = () => {
   const [executionRecords, setExecutionRecords] = useState<ExecutionRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
 
+  // 全选状态
+  const [addTaskSelectAll, setAddTaskSelectAll] = useState(false);
+  const [batchImportSelectAll, setBatchImportSelectAll] = useState(false);
+
   useEffect(() => {
     loadTasks();
     loadGitHubAccounts();
+    loadGroups();
   }, []);
 
   const loadTasks = async () => {
@@ -114,9 +135,49 @@ const RepositoryStarManagement: React.FC = () => {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const response = await githubGroupsAPI.getGroups();
+      if (response.data.success) {
+        setGroups(response.data.groups || []);
+      }
+    } catch (error: any) {
+      message.error('加载分组列表失败');
+    }
+  };
+
+  const handleSelectByGroup = (groupId: number) => {
+    const accountsInGroup = githubAccounts
+      .filter(account => account.group_id === groupId)
+      .map(account => account.id);
+    addTaskForm.setFieldsValue({ github_account_ids: accountsInGroup });
+    setAddTaskSelectAll(false);
+  };
+
+  const handleBatchImportSelectByGroup = (groupId: number) => {
+    const accountsInGroup = githubAccounts
+      .filter(account => account.group_id === groupId)
+      .map(account => account.id);
+    batchImportForm.setFieldsValue({ github_account_ids: accountsInGroup });
+    setBatchImportSelectAll(false);
+  };
+
   const handleAddTask = () => {
     addTaskForm.resetFields();
+    setAddTaskSelectAll(false);
     setAddTaskVisible(true);
+  };
+
+  const handleAddTaskSelectAllChange = (checked: boolean) => {
+    setAddTaskSelectAll(checked);
+    if (checked) {
+      // 全选所有账号
+      const allAccountIds = githubAccounts.map(account => account.id);
+      addTaskForm.setFieldsValue({ github_account_ids: allAccountIds });
+    } else {
+      // 取消全选
+      addTaskForm.setFieldsValue({ github_account_ids: [] });
+    }
   };
 
   const handleAddTaskSubmit = async () => {
@@ -147,6 +208,42 @@ const RepositoryStarManagement: React.FC = () => {
     }
   };
 
+  const handleEditTask = (task: RepositoryStarTask) => {
+    setEditingTask(task);
+    editTaskForm.setFieldsValue({
+      repository_url: task.repository_url,
+      description: task.description
+    });
+    setEditTaskVisible(true);
+  };
+
+  const handleEditTaskSubmit = async () => {
+    try {
+      const values = await editTaskForm.validateFields();
+      setEditTaskLoading(true);
+
+      const response = await repositoryStarAPI.updateTask(editingTask!.id, {
+        repository_url: values.repository_url,
+        description: values.description
+      });
+
+      if (response.data.success) {
+        message.success('任务更新成功');
+        setEditTaskVisible(false);
+        setEditingTask(null);
+        loadTasks();
+      }
+    } catch (error: any) {
+      if (error.response?.data?.detail) {
+        message.error(error.response.data.detail);
+      } else {
+        message.error('更新任务失败');
+      }
+    } finally {
+      setEditTaskLoading(false);
+    }
+  };
+
   const handleDeleteTask = async (id: number) => {
     try {
       const response = await repositoryStarAPI.deleteTask(id);
@@ -159,10 +256,11 @@ const RepositoryStarManagement: React.FC = () => {
     }
   };
 
-  const handleExecuteTask = async (id: number) => {
+  const handleExecuteTask = async (id: number, forceExecute: boolean = false) => {
     try {
-      message.loading({ content: '正在执行收藏任务...', key: 'execute', duration: 0 });
-      const response = await repositoryStarAPI.executeTask(id);
+      const msgContent = forceExecute ? '正在强制执行收藏任务...' : '正在执行收藏任务...';
+      message.loading({ content: msgContent, key: 'execute', duration: 0 });
+      const response = await repositoryStarAPI.executeTask(id, { force_execute: forceExecute });
 
       if (response.data.success) {
         const result = response.data;
@@ -216,7 +314,20 @@ const RepositoryStarManagement: React.FC = () => {
 
   const handleBatchImport = () => {
     batchImportForm.resetFields();
+    setBatchImportSelectAll(false);
     setBatchImportVisible(true);
+  };
+
+  const handleBatchImportSelectAllChange = (checked: boolean) => {
+    setBatchImportSelectAll(checked);
+    if (checked) {
+      // 全选所有账号
+      const allAccountIds = githubAccounts.map(account => account.id);
+      batchImportForm.setFieldsValue({ github_account_ids: allAccountIds });
+    } else {
+      // 取消全选
+      batchImportForm.setFieldsValue({ github_account_ids: [] });
+    }
   };
 
   const handleBatchImportSubmit = async () => {
@@ -310,15 +421,32 @@ const RepositoryStarManagement: React.FC = () => {
       title: '操作',
       key: 'actions',
       render: (_: any, record: RepositoryStarTask) => (
-        <Space>
+        <Space size={4}>
           <Button
             type="primary"
             size="small"
             icon={<PlayCircleOutlined />}
-            onClick={() => handleExecuteTask(record.id)}
+            onClick={() => handleExecuteTask(record.id, false)}
+            title="执行未收藏的账号"
           >
             执行
           </Button>
+          <Popconfirm
+            title="强制执行将重新对所有账号执行收藏操作，确定继续吗？"
+            onConfirm={() => handleExecuteTask(record.id, true)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button
+              type="primary"
+              size="small"
+              icon={<ReloadOutlined />}
+              title="强制重新执行所有账号"
+              style={{ backgroundColor: '#ff9800', borderColor: '#ff9800' }}
+            >
+              强制执行
+            </Button>
+          </Popconfirm>
           <Button
             size="small"
             danger
@@ -326,6 +454,13 @@ const RepositoryStarManagement: React.FC = () => {
             onClick={() => handleUnstarTask(record.id)}
           >
             取消收藏
+          </Button>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEditTask(record)}
+          >
+            编辑
           </Button>
           <Button
             size="small"
@@ -466,7 +601,8 @@ const RepositoryStarManagement: React.FC = () => {
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个任务`
+            showQuickJumper: true,
+            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`
           }}
         />
       </Card>
@@ -501,12 +637,55 @@ const RepositoryStarManagement: React.FC = () => {
           
           <Form.Item
             name="github_account_ids"
-            label="选择GitHub账号"
+            label={
+              <Space>
+                <span>选择GitHub账号</span>
+                <Checkbox
+                  checked={addTaskSelectAll}
+                  onChange={(e) => handleAddTaskSelectAllChange(e.target.checked)}
+                >
+                  全选
+                </Checkbox>
+                {groups.length > 0 && (
+                  <Select
+                    placeholder="按分组选择"
+                    style={{ width: 150 }}
+                    onChange={(value) => handleSelectByGroup(value)}
+                    size="small"
+                    allowClear
+                  >
+                    {groups.map(group => (
+                      <Option key={group.id} value={group.id}>
+                        <Space>
+                          {group.color && (
+                            <div
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                backgroundColor: group.color,
+                                display: 'inline-block'
+                              }}
+                            />
+                          )}
+                          <span>{group.name}</span>
+                        </Space>
+                      </Option>
+                    ))}
+                  </Select>
+                )}
+              </Space>
+            }
           >
             <Select
               mode="multiple"
-              placeholder="选择要使用的GitHub账号（可多选）"
+              placeholder="选择要使用的GitHub账号（可多选，不选则使用所有账号）"
               allowClear
+              onChange={() => {
+                // 手动修改选择时，检查是否还是全选状态
+                const selectedIds = addTaskForm.getFieldValue('github_account_ids') || [];
+                setAddTaskSelectAll(selectedIds.length === githubAccounts.length && githubAccounts.length > 0);
+              }}
             >
               {githubAccounts.map(account => (
                 <Option key={account.id} value={account.id}>
@@ -548,13 +727,56 @@ const RepositoryStarManagement: React.FC = () => {
           
           <Form.Item
             name="github_account_ids"
-            label="选择GitHub账号"
+            label={
+              <Space>
+                <span>选择GitHub账号</span>
+                <Checkbox
+                  checked={batchImportSelectAll}
+                  onChange={(e) => handleBatchImportSelectAllChange(e.target.checked)}
+                >
+                  全选
+                </Checkbox>
+                {groups.length > 0 && (
+                  <Select
+                    placeholder="按分组选择"
+                    style={{ width: 150 }}
+                    onChange={(value) => handleBatchImportSelectByGroup(value)}
+                    size="small"
+                    allowClear
+                  >
+                    {groups.map(group => (
+                      <Option key={group.id} value={group.id}>
+                        <Space>
+                          {group.color && (
+                            <div
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                backgroundColor: group.color,
+                                display: 'inline-block'
+                              }}
+                            />
+                          )}
+                          <span>{group.name}</span>
+                        </Space>
+                      </Option>
+                    ))}
+                  </Select>
+                )}
+              </Space>
+            }
             rules={[{ required: true, message: '请至少选择一个GitHub账号' }]}
           >
             <Select
               mode="multiple"
               placeholder="选择要使用的GitHub账号"
               allowClear
+              onChange={() => {
+                // 手动修改选择时，检查是否还是全选状态
+                const selectedIds = batchImportForm.getFieldValue('github_account_ids') || [];
+                setBatchImportSelectAll(selectedIds.length === githubAccounts.length && githubAccounts.length > 0);
+              }}
             >
               {githubAccounts.map(account => (
                 <Option key={account.id} value={account.id}>
@@ -569,6 +791,36 @@ const RepositoryStarManagement: React.FC = () => {
             valuePropName="checked"
           >
             <Checkbox>立即执行（导入后立即开始收藏）</Checkbox>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑任务对话框 */}
+      <Modal
+        title="编辑仓库收藏任务"
+        open={editTaskVisible}
+        onOk={handleEditTaskSubmit}
+        onCancel={() => {
+          setEditTaskVisible(false);
+          setEditingTask(null);
+        }}
+        confirmLoading={editTaskLoading}
+        width={600}
+      >
+        <Form form={editTaskForm} layout="vertical">
+          <Form.Item
+            name="repository_url"
+            label="仓库URL"
+            rules={[{ required: true, message: '请输入GitHub仓库URL' }]}
+          >
+            <Input placeholder="https://github.com/owner/repo" />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="描述/备注"
+          >
+            <TextArea rows={3} placeholder="可选：添加任务描述或备注信息" />
           </Form.Item>
         </Form>
       </Modal>
@@ -623,7 +875,8 @@ const RepositoryStarManagement: React.FC = () => {
                 dataSource={executionRecords}
                 rowKey="id"
                 loading={recordsLoading}
-                pagination={{ pageSize: 5 }}
+                pagination={false}
+                scroll={{ y: 400 }}
                 size="small"
               />
             </div>

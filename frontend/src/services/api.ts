@@ -59,54 +59,87 @@ export const authAPI = {
     api.put('/auth/change-password', data),
 };
 
+// GitHub账号分组接口
+export const githubGroupsAPI = {
+  // 获取所有分组
+  getGroups: () =>
+    api.get('/github/groups'),
+
+  // 获取单个分组详情
+  getGroup: (id: number) =>
+    api.get(`/github/groups/${id}`),
+
+  // 创建分组
+  createGroup: (data: {
+    name: string;
+    description?: string;
+    color?: string;
+  }) =>
+    api.post('/github/groups', data),
+
+  // 更新分组
+  updateGroup: (id: number, data: {
+    name?: string;
+    description?: string;
+    color?: string;
+  }) =>
+    api.put(`/github/groups/${id}`, data),
+
+  // 删除分组
+  deleteGroup: (id: number) =>
+    api.delete(`/github/groups/${id}`),
+};
+
 // GitHub账号接口
 export const githubAPI = {
   // 获取所有账号
   getAccounts: () =>
     api.get('/github/accounts'),
-  
+
   // 获取单个账号详情（包含真实密码和密钥）
   getAccount: (id: number) =>
     api.get(`/github/accounts/${id}`),
-  
+
   // 创建账号
   createAccount: (data: {
     username: string;
     password: string;
     totp_secret: string;
     created_at: string;
+    group_id?: number;
   }) =>
     api.post('/github/accounts', data),
-  
+
   // 更新账号
   updateAccount: (id: number, data: any) =>
     api.put(`/github/accounts/${id}`, data),
-  
+
   // 删除账号
   deleteAccount: (id: number) =>
     api.delete(`/github/accounts/${id}`),
-  
+
   // 获取TOTP验证码
   getTOTP: (id: number) =>
     api.get(`/github/accounts/${id}/totp`),
-  
+
   // 批量获取所有TOTP验证码
   getAllTOTP: () =>
     api.get('/github/totp/batch'),
-  
+
   // 批量导入账号
   batchImport: (accounts: Array<{
     username: string;
     password: string;
     totp_secret: string;
     created_at: string;
+    group_id?: number;
   }>) =>
     api.post('/github/accounts/batch-import', { accounts }),
-  
+
   // GitHub OAuth登录到第三方网站
   oauthLogin: (githubAccountId: number, websiteUrl: string = 'https://anyrouter.top') =>
     api.post(`/github/oauth-login/${githubAccountId}?website_url=${encodeURIComponent(websiteUrl)}`),
-  
+
   // anyrouter.top GitHub OAuth登录快捷方式
   oauthLoginAnyrouter: (githubAccountId: number) =>
     api.post(`/github/oauth-login-anyrouter/${githubAccountId}`),
@@ -231,6 +264,7 @@ export const repositoryStarAPI = {
   // 手动执行任务
   executeTask: (id: number, data?: {
     github_account_ids?: number[];
+    force_execute?: boolean;
   }) =>
     api.post(`/repository-star/tasks/${id}/execute`, data || {}),
 

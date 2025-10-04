@@ -85,6 +85,10 @@ const ScheduledTasksManagement: React.FC = () => {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
 
+  // 全选状态
+  const [createSelectAll, setCreateSelectAll] = useState(false);
+  const [editSelectAll, setEditSelectAll] = useState(false);
+
   useEffect(() => {
     loadTasks();
     loadGitHubAccounts();
@@ -114,6 +118,26 @@ const ScheduledTasksManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('获取GitHub账号列表失败', error);
+    }
+  };
+
+  const handleCreateSelectAllChange = (checked: boolean) => {
+    setCreateSelectAll(checked);
+    if (checked) {
+      const allAccountIds = githubAccounts.map(account => account.id);
+      form.setFieldsValue({ github_account_ids: allAccountIds });
+    } else {
+      form.setFieldsValue({ github_account_ids: [] });
+    }
+  };
+
+  const handleEditSelectAllChange = (checked: boolean) => {
+    setEditSelectAll(checked);
+    if (checked) {
+      const allAccountIds = githubAccounts.map(account => account.id);
+      editForm.setFieldsValue({ github_account_ids: allAccountIds });
+    } else {
+      editForm.setFieldsValue({ github_account_ids: [] });
     }
   };
 
@@ -585,7 +609,17 @@ const ScheduledTasksManagement: React.FC = () => {
 
           <Form.Item
             name="github_account_ids"
-            label="选择GitHub账号"
+            label={
+              <Space>
+                <span>选择GitHub账号</span>
+                <Checkbox
+                  checked={createSelectAll}
+                  onChange={(e) => handleCreateSelectAllChange(e.target.checked)}
+                >
+                  全选
+                </Checkbox>
+              </Space>
+            }
             rules={[{ required: true, message: '请选择至少一个GitHub账号' }]}
           >
             <Select
@@ -703,7 +737,17 @@ const ScheduledTasksManagement: React.FC = () => {
 
           <Form.Item
             name="github_account_ids"
-            label="选择GitHub账号"
+            label={
+              <Space>
+                <span>选择GitHub账号</span>
+                <Checkbox
+                  checked={editSelectAll}
+                  onChange={(e) => handleEditSelectAllChange(e.target.checked)}
+                >
+                  全选
+                </Checkbox>
+              </Space>
+            }
             rules={[{ required: true, message: '请选择至少一个GitHub账号' }]}
           >
             <Select

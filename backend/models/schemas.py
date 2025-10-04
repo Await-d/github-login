@@ -44,12 +44,52 @@ class UserResponse(BaseModel):
     user: Optional[User] = None
 
 
+# GitHub账号分组相关模型
+class GitHubAccountGroupBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="分组名称")
+    description: Optional[str] = Field(None, description="分组描述")
+    color: Optional[str] = Field(None, description="分组颜色")
+
+
+class GitHubAccountGroupCreate(GitHubAccountGroupBase):
+    pass
+
+
+class GitHubAccountGroupUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=50, description="分组名称")
+    description: Optional[str] = None
+    color: Optional[str] = None
+
+
+class GitHubAccountGroup(GitHubAccountGroupBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GitHubAccountGroupWithCount(GitHubAccountGroup):
+    """带账号数量的分组信息"""
+    account_count: int = Field(default=0, description="该分组中的账号数量")
+
+
+class GitHubAccountGroupResponse(BaseModel):
+    success: bool
+    message: str
+    group: Optional[GitHubAccountGroup] = None
+    groups: Optional[List[GitHubAccountGroupWithCount]] = None
+
+
 # GitHub账号相关模型
 class GitHubAccountBase(BaseModel):
     username: str = Field(..., description="GitHub用户名")
     password: str = Field(..., description="GitHub密码")
     totp_secret: str = Field(..., description="TOTP密钥")
     created_at: str = Field(..., description="创建日期 (YYYY-MM-DD)")
+    group_id: Optional[int] = Field(None, description="所属分组ID")
 
 
 class GitHubAccountCreate(GitHubAccountBase):
@@ -61,13 +101,14 @@ class GitHubAccountUpdate(BaseModel):
     password: Optional[str] = None
     totp_secret: Optional[str] = None
     created_at: Optional[str] = None
+    group_id: Optional[int] = None
 
 
 class GitHubAccount(GitHubAccountBase):
     id: int
     user_id: int
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -76,12 +117,13 @@ class GitHubAccountSafe(BaseModel):
     """安全的GitHub账号信息（隐藏敏感字段）"""
     id: int
     user_id: int
+    group_id: Optional[int] = None
     username: str
     password: Optional[str] = None  # 可选，用于查看详情时
     totp_secret: Optional[str] = None  # 可选，用于查看详情时
     created_at: str
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -439,6 +481,7 @@ class RepositoryStarRecordResponse(BaseModel):
 
 class RepositoryStarExecuteRequest(BaseModel):
     github_account_ids: Optional[List[int]] = Field(None, description="要执行的GitHub账号ID列表，不传则执行所有未star的账号")
+    force_execute: bool = Field(default=False, description="是否强制执行（重新执行已成功的账号）")
 
 
 class RepositoryStarExecuteResponse(BaseModel):

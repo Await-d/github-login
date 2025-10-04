@@ -39,24 +39,47 @@ class User(Base):
     
     # 关联的GitHub账号
     github_accounts = relationship("GitHubAccount", back_populates="owner", cascade="all, delete-orphan")
+    # 关联的GitHub账号分组
+    github_account_groups = relationship("GitHubAccountGroup", back_populates="owner", cascade="all, delete-orphan")
     # 关联的API网站账号
     api_websites = relationship("ApiWebsite", back_populates="owner", cascade="all, delete-orphan")
+
+
+class GitHubAccountGroup(Base):
+    """GitHub账号分组模型"""
+    __tablename__ = "github_account_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)  # 分组名称
+    description = Column(Text)  # 分组描述
+    color = Column(String)  # 分组颜色标识（用于前端展示）
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # 关联用户
+    owner = relationship("User", back_populates="github_account_groups")
+    # 关联的GitHub账号
+    accounts = relationship("GitHubAccount", back_populates="group")
 
 
 class GitHubAccount(Base):
     """GitHub账号模型"""
     __tablename__ = "github_accounts"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("github_account_groups.id"), nullable=True)  # 所属分组
     username = Column(String, nullable=False)
     encrypted_password = Column(Text, nullable=False)  # 加密存储
     encrypted_totp_secret = Column(Text, nullable=False)  # 加密存储
     created_at = Column(String, nullable=False)  # 日期字符串格式 YYYY-MM-DD
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     # 关联用户
     owner = relationship("User", back_populates="github_accounts")
+    # 关联分组
+    group = relationship("GitHubAccountGroup", back_populates="accounts")
 
 
 class ApiWebsite(Base):

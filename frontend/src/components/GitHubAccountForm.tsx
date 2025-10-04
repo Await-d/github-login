@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, DatePicker } from 'antd';
+import { Modal, Form, Input, DatePicker, Select } from 'antd';
 import dayjs from 'dayjs';
+
+const { Option } = Select;
 
 interface GitHubAccount {
   id?: number;
@@ -8,6 +10,13 @@ interface GitHubAccount {
   password: string;
   totp_secret: string;
   created_at: string;
+  group_id?: number;
+}
+
+interface GitHubGroup {
+  id: number;
+  name: string;
+  color: string | null;
 }
 
 interface Props {
@@ -16,6 +25,7 @@ interface Props {
   onSubmit: (values: GitHubAccount) => Promise<void>;
   account?: GitHubAccount;
   loading?: boolean;
+  groups?: GitHubGroup[];
 }
 
 const GitHubAccountForm: React.FC<Props> = ({
@@ -23,7 +33,8 @@ const GitHubAccountForm: React.FC<Props> = ({
   onCancel,
   onSubmit,
   account,
-  loading = false
+  loading = false,
+  groups = []
 }) => {
   const [form] = Form.useForm();
 
@@ -117,6 +128,35 @@ const GitHubAccountForm: React.FC<Props> = ({
             format="YYYY-MM-DD"
             placeholder="请选择创建日期"
           />
+        </Form.Item>
+
+        <Form.Item
+          name="group_id"
+          label="所属分组"
+        >
+          <Select
+            placeholder="请选择分组（可选）"
+            allowClear
+            style={{ width: '100%' }}
+          >
+            {groups.map(group => (
+              <Option key={group.id} value={group.id}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {group.color && (
+                    <div
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: group.color,
+                      }}
+                    />
+                  )}
+                  <span>{group.name}</span>
+                </div>
+              </Option>
+            ))}
+          </Select>
         </Form.Item>
       </Form>
     </Modal>

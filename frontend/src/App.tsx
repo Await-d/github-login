@@ -6,6 +6,7 @@ import LoginForm from './components/LoginForm';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
 import GitHubAccountManagement from './pages/GitHubAccountManagement';
+import GitHubGroupsManagement from './pages/GitHubGroupsManagement';
 import RepositoryStarManagement from './pages/RepositoryStarManagement';
 import ScheduledTasksManagement from './pages/ScheduledTasksManagement';
 import ApiWebsiteManagement from './pages/ApiWebsiteManagement';
@@ -51,6 +52,7 @@ const AppContent: React.FC = () => {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="github/accounts" element={<GitHubAccountManagement />} />
+          <Route path="github/groups" element={<GitHubGroupsManagement />} />
           <Route path="github/repositories" element={<RepositoryStarManagement />} />
           <Route path="automation/tasks" element={<ScheduledTasksManagement />} />
           <Route path="automation/websites" element={<ApiWebsiteManagement />} />

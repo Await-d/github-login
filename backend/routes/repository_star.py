@@ -70,30 +70,40 @@ async def create_repository_star_task(
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
-    
-    # 如果指定了要执行的账号并且设置了立即执行，则创建初始记录
-    if task_data.github_account_ids and task_data.execute_immediately:
+
+    # 如果设置了立即执行
+    if task_data.execute_immediately:
+        # 确定要执行的账号列表
+        account_ids_to_execute = task_data.github_account_ids or []
+
+        # 如果没有指定账号，使用所有可用账号
+        if not account_ids_to_execute:
+            all_accounts = db.query(GitHubAccount).filter(
+                GitHubAccount.user_id == current_user.id
+            ).all()
+            account_ids_to_execute = [acc.id for acc in all_accounts]
+
         # 异步执行star操作
-        for account_id in task_data.github_account_ids:
+        for account_id in account_ids_to_execute:
             # 验证账号是否属于当前用户
             account = db.query(GitHubAccount).filter(
                 GitHubAccount.id == account_id,
                 GitHubAccount.user_id == current_user.id
             ).first()
-            
+
             if account:
                 # 执行star操作
                 try:
                     github_password = decrypt_data(account.encrypted_password)
                     totp_secret = decrypt_data(account.encrypted_totp_secret)
-                    
+
                     success, message = await star_repository_simple(
                         task_data.repository_url,
                         account.username,
                         github_password,
                         totp_secret
                     )
-                    
+
                     # 创建执行记录
                     record = RepositoryStarRecord(
                         task_id=new_task.id,
@@ -102,7 +112,7 @@ async def create_repository_star_task(
                         error_message=None if success else message
                     )
                     db.add(record)
-                    
+
                 except Exception as e:
                     # 记录失败
                     record = RepositoryStarRecord(
@@ -112,7 +122,7 @@ async def create_repository_star_task(
                         error_message=str(e)
                     )
                     db.add(record)
-        
+
         db.commit()
     
     # 获取任务统计信息
@@ -274,20 +284,25 @@ async def execute_repository_star_task(
         # 使用指定的账号
         account_ids = execute_data.github_account_ids
     else:
-        # 获取所有用户的GitHub账号，排除已经star过的
+        # 获取所有用户的GitHub账号
         all_accounts = db.query(GitHubAccount).filter(
             GitHubAccount.user_id == current_user.id
         ).all()
-        
-        # 获取已经执行过的账号ID
-        executed_account_ids = db.query(RepositoryStarRecord.github_account_id).filter(
-            RepositoryStarRecord.task_id == task_id,
-            RepositoryStarRecord.status == "success"
-        ).all()
-        executed_account_ids = [record[0] for record in executed_account_ids]
-        
-        # 过滤出未执行的账号
-        account_ids = [acc.id for acc in all_accounts if acc.id not in executed_account_ids]
+
+        # 如果不是强制执行，需要排除已经star过的账号
+        if not execute_data.force_execute:
+            # 获取已经执行成功的账号ID
+            executed_account_ids = db.query(RepositoryStarRecord.github_account_id).filter(
+                RepositoryStarRecord.task_id == task_id,
+                RepositoryStarRecord.status == "success"
+            ).all()
+            executed_account_ids = [record[0] for record in executed_account_ids]
+
+            # 过滤出未执行的账号
+            account_ids = [acc.id for acc in all_accounts if acc.id not in executed_account_ids]
+        else:
+            # 强制执行，使用所有账号
+            account_ids = [acc.id for acc in all_accounts]
     
     if not account_ids:
         return RepositoryStarExecuteResponse(
@@ -488,17 +503,27 @@ async def batch_import_repository_star_tasks(
         created_tasks.append(new_task)
     
     db.commit()
-    
+
     # 如果设置了立即执行，则执行star操作
     if import_data.execute_immediately and created_tasks:
+        # 确定要执行的账号列表
+        account_ids_to_execute = import_data.github_account_ids or []
+
+        # 如果没有指定账号，使用所有可用账号
+        if not account_ids_to_execute:
+            all_accounts = db.query(GitHubAccount).filter(
+                GitHubAccount.user_id == current_user.id
+            ).all()
+            account_ids_to_execute = [acc.id for acc in all_accounts]
+
         for task in created_tasks:
             db.refresh(task)
-            for account_id in import_data.github_account_ids:
+            for account_id in account_ids_to_execute:
                 account = db.query(GitHubAccount).filter(
                     GitHubAccount.id == account_id,
                     GitHubAccount.user_id == current_user.id
                 ).first()
-                
+
                 if account:
                     try:
                         github_password = decrypt_data(account.encrypted_password)
@@ -510,7 +535,7 @@ async def batch_import_repository_star_tasks(
                             github_password,
                             totp_secret
                         )
-                        
+
                         record = RepositoryStarRecord(
                             task_id=task.id,
                             github_account_id=account_id,
@@ -518,7 +543,7 @@ async def batch_import_repository_star_tasks(
                             error_message=None if success else message
                         )
                         db.add(record)
-                        
+
                     except Exception as e:
                         record = RepositoryStarRecord(
                             task_id=task.id,
@@ -527,7 +552,7 @@ async def batch_import_repository_star_tasks(
                             error_message=str(e)
                         )
                         db.add(record)
-        
+
         db.commit()
     
     # 获取创建的任务列表（带统计）

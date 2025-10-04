@@ -28,7 +28,7 @@ import {
   SearchOutlined,
   FilterOutlined
 } from '@ant-design/icons';
-import { githubAPI } from '../services/api';
+import { githubAPI, githubGroupsAPI } from '../services/api';
 import GitHubAccountForm from '../components/GitHubAccountForm';
 import BatchImportModal from '../components/BatchImportModal';
 
@@ -44,6 +44,14 @@ interface GitHubAccount {
   totp_secret: string;
   created_at: string;
   updated_at: string;
+  group_id?: number;
+}
+
+interface GitHubGroup {
+  id: number;
+  name: string;
+  color: string | null;
+  account_count: number;
 }
 
 interface TOTPItem {
@@ -80,8 +88,13 @@ const GitHubAccountManagement: React.FC = () => {
   const [dateRange, setDateRange] = useState<[any, any] | null>(null);
   const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>('descend');
 
+  // 分组相关状态
+  const [groups, setGroups] = useState<GitHubGroup[]>([]);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<number | null>(null);
+
   useEffect(() => {
     loadAccounts();
+    loadGroups();
   }, []);
 
   useEffect(() => {
@@ -164,6 +177,17 @@ const GitHubAccountManagement: React.FC = () => {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const response = await githubGroupsAPI.getGroups();
+      if (response.data.success) {
+        setGroups(response.data.groups || []);
+      }
+    } catch (error: any) {
+      message.error('加载分组列表失败');
+    }
+  };
+
   useEffect(() => {
     let filtered = [...accounts];
 
@@ -182,6 +206,16 @@ const GitHubAccountManagement: React.FC = () => {
       });
     }
 
+    // 按分组筛选
+    if (selectedGroupFilter !== null) {
+      if (selectedGroupFilter === -1) {
+        // 未分组
+        filtered = filtered.filter(account => !account.group_id);
+      } else {
+        filtered = filtered.filter(account => account.group_id === selectedGroupFilter);
+      }
+    }
+
     if (sortOrder) {
       filtered.sort((a, b) => {
         const dateA = new Date(a.created_at).getTime();
@@ -191,12 +225,13 @@ const GitHubAccountManagement: React.FC = () => {
     }
 
     setFilteredAccounts(filtered);
-  }, [accounts, searchText, dateRange, sortOrder]);
+  }, [accounts, searchText, dateRange, sortOrder, selectedGroupFilter]);
 
   const handleResetFilters = () => {
     setSearchText('');
     setDateRange(null);
     setSortOrder('descend');
+    setSelectedGroupFilter(null);
   };
 
   const handleAddAccount = () => {
@@ -373,6 +408,34 @@ const GitHubAccountManagement: React.FC = () => {
       dataIndex: 'username',
       key: 'username',
       render: (text: string) => <Text strong>{text}</Text>
+    },
+    {
+      title: '所属分组',
+      key: 'group',
+      render: (_: any, record: GitHubAccount) => {
+        if (!record.group_id) {
+          return <Text type="secondary">未分组</Text>;
+        }
+        const group = groups.find(g => g.id === record.group_id);
+        if (!group) {
+          return <Text type="secondary">未知分组</Text>;
+        }
+        return (
+          <Space>
+            {group.color && (
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: group.color,
+                }}
+              />
+            )}
+            <Text>{group.name}</Text>
+          </Space>
+        );
+      }
     },
     {
       title: '创建日期',
@@ -559,7 +622,7 @@ const GitHubAccountManagement: React.FC = () => {
       >
         <div style={{ marginBottom: 16 }}>
           <Row gutter={[16, 16]}>
-            <Col xs={24} sm={24} md={8}>
+            <Col xs={24} sm={12} md={6}>
               <Search
                 placeholder="搜索GitHub用户名"
                 value={searchText}
@@ -570,7 +633,37 @@ const GitHubAccountManagement: React.FC = () => {
                 allowClear
               />
             </Col>
-            <Col xs={24} sm={24} md={8}>
+            <Col xs={24} sm={12} md={6}>
+              <Select
+                placeholder="筛选分组"
+                value={selectedGroupFilter}
+                onChange={(value) => setSelectedGroupFilter(value)}
+                style={{ width: '100%' }}
+                allowClear
+              >
+                <Option value={-1}>未分组</Option>
+                {groups.map(group => (
+                  <Option key={group.id} value={group.id}>
+                    <Space>
+                      {group.color && (
+                        <div
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: group.color,
+                            display: 'inline-block'
+                          }}
+                        />
+                      )}
+                      <span>{group.name}</span>
+                      <span style={{ color: '#999' }}>({group.account_count})</span>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
               <RangePicker
                 placeholder={['开始日期', '结束日期']}
                 value={dateRange}
@@ -578,7 +671,7 @@ const GitHubAccountManagement: React.FC = () => {
                 style={{ width: '100%' }}
               />
             </Col>
-            <Col xs={12} sm={12} md={4}>
+            <Col xs={12} sm={6} md={3}>
               <Select
                 placeholder="排序方式"
                 value={sortOrder}
@@ -589,7 +682,7 @@ const GitHubAccountManagement: React.FC = () => {
                 <Option value="ascend">创建时间↑</Option>
               </Select>
             </Col>
-            <Col xs={12} sm={12} md={4}>
+            <Col xs={12} sm={6} md={3}>
               <Button
                 icon={<FilterOutlined />}
                 onClick={handleResetFilters}
@@ -620,6 +713,7 @@ const GitHubAccountManagement: React.FC = () => {
         onCancel={() => setFormVisible(false)}
         onSubmit={handleFormSubmit}
         account={editingAccount}
+        groups={groups}
       />
 
       <Modal
