@@ -67,6 +67,9 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /app/backend/requirements.txt
 
+# 安装Playwright浏览器（跳过系统依赖安装，因为已经手动安装）
+RUN playwright install chromium
+
 # 复制后端项目文件
 COPY backend/ /app/backend/
 

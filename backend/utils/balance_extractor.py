@@ -98,8 +98,14 @@ class BalanceExtractor:
         """通过CSS选择器提取余额"""
         print("🔍 使用CSS选择器搜索余额...")
         
-        # 专门针对 anyrouter.top 的选择器，基于用户提供的HTML结构
+        # 专门针对 anyrouter.top 的选择器，基于实际测试的HTML结构
         selectors = [
+            # anyrouter.top 特定结构：查找"Current balance"文本后的兄弟元素
+            ("xpath", "//*[contains(text(), 'Current balance')]/following-sibling::*[1]"),
+            ("xpath", "//*[contains(text(), '当前余额')]/following-sibling::*[1]"),
+            # anyrouter.top：通过父元素查找
+            ("xpath", "//*[text()='Current balance']/parent::*/following-sibling::*"),
+            ("xpath", "//*[text()='当前余额']/parent::*/following-sibling::*"),
             # 最高优先级：通过上下文定位余额
             # 查找包含"当前余额"或"balance"文字的父元素下的金额
             ("xpath", "//div[contains(., '当前余额') or contains(., 'balance') or contains(., 'Balance')]//*[@class='text-lg font-semibold']"),
@@ -161,13 +167,14 @@ class BalanceExtractor:
         try:
             page_source = self.driver.page_source
             
-            # 优先查找带有"当前余额"或"balance"标签的金额
+            # 优先查找带有"当前余额"或"Current balance"标签的金额（精确匹配）
             context_patterns = [
-                (r'当前余额[^\$]*?\$(\d+\.\d{2})', 'USD'),
-                (r'balance[^\$]*?\$(\d+\.\d{2})', 'USD'),
-                (r'Balance[^\$]*?\$(\d+\.\d{2})', 'USD'),
-                (r'账户余额[^\$]*?\$(\d+\.\d{2})', 'USD'),
-                (r'可用余额[^\$]*?\$(\d+\.\d{2})', 'USD'),
+                # anyrouter.top 专用：精确匹配 "Current balance" 后的金额（允许HTML标签）
+                (r'Current.*?balance.*?\$(\d+\.\d{2})', 'USD'),
+                (r'current.*?balance.*?\$(\d+\.\d{2})', 'USD'),
+                (r'当前余额.*?\$(\d+\.\d{2})', 'USD'),
+                (r'账户余额.*?\$(\d+\.\d{2})', 'USD'),
+                (r'可用余额.*?\$(\d+\.\d{2})', 'USD'),
             ]
             
             for pattern, curr in context_patterns:

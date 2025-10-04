@@ -344,8 +344,10 @@ const ScheduledTasksManagement: React.FC = () => {
     {
       title: '操作',
       key: 'actions',
+      width: 180,
+      fixed: 'right' as const,
       render: (_: any, record: ScheduledTask) => (
-        <Space>
+        <Space size={4}>
           <Tooltip title={record.is_active ? '暂停任务' : '启用任务'}>
             <Button
               size="small"
@@ -517,6 +519,7 @@ const ScheduledTasksManagement: React.FC = () => {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 1200 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

@@ -146,8 +146,12 @@ class TaskExecutionLog(Base):
     task = relationship("ScheduledTask", back_populates="execution_logs")
 
 
+# 导入仓库收藏模型
+from .repository_star import RepositoryStarTask, RepositoryStarRecord
+
 # 更新User模型关联
 User.scheduled_tasks = relationship("ScheduledTask", back_populates="owner", cascade="all, delete-orphan")
+User.repository_star_tasks = relationship("RepositoryStarTask", back_populates="owner_user", cascade="all, delete-orphan")
 
 # 更新ScheduledTask模型关联  
 ScheduledTask.execution_logs = relationship("TaskExecutionLog", back_populates="task", cascade="all, delete-orphan")

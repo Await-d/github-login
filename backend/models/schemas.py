@@ -287,12 +287,12 @@ class ScheduledTaskSchema(ScheduledTaskBase):
     last_run_time: Optional[datetime] = None
     next_run_time: Optional[datetime] = None
     last_result: Optional[str] = None
-    run_count: int
-    success_count: int
-    error_count: int
+    run_count: Optional[int] = 0
+    success_count: Optional[int] = 0
+    error_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -368,3 +368,90 @@ class GitHubOAuthSessionInfo(BaseModel):
     login_method: str
     website_url: str
     user_agent: Optional[str] = None
+
+
+# 仓库收藏相关模型
+class RepositoryStarTaskBase(BaseModel):
+    repository_url: str = Field(..., description="仓库URL")
+    description: Optional[str] = Field(None, description="描述/备注")
+
+
+class RepositoryStarTaskCreate(BaseModel):
+    repository_url: str = Field(..., description="仓库URL (如 https://github.com/owner/repo)")
+    description: Optional[str] = Field(None, description="描述/备注")
+    github_account_ids: List[int] = Field(..., description="要使用的GitHub账号ID列表")
+    execute_immediately: bool = Field(default=False, description="是否立即执行")
+
+
+class RepositoryStarTaskUpdate(BaseModel):
+    repository_url: Optional[str] = None
+    description: Optional[str] = None
+
+
+class RepositoryStarTaskSchema(BaseModel):
+    id: int
+    user_id: int
+    repository_url: str
+    owner: str
+    repo_name: str
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class RepositoryStarTaskWithStats(RepositoryStarTaskSchema):
+    """带有统计信息的任务"""
+    total_accounts: int = Field(default=0, description="总账号数")
+    starred_accounts: int = Field(default=0, description="已收藏账号数")
+    success_count: int = Field(default=0, description="成功次数")
+    failed_count: int = Field(default=0, description="失败次数")
+
+
+class RepositoryStarTaskResponse(BaseModel):
+    success: bool
+    message: str
+    task: Optional[RepositoryStarTaskWithStats] = None
+    tasks: Optional[List[RepositoryStarTaskWithStats]] = None
+
+
+class RepositoryStarRecordSchema(BaseModel):
+    id: int
+    task_id: int
+    github_account_id: int
+    status: str
+    error_message: Optional[str] = None
+    executed_at: datetime
+    github_username: Optional[str] = None  # 关联的GitHub账号用户名
+    
+    class Config:
+        from_attributes = True
+
+
+class RepositoryStarRecordResponse(BaseModel):
+    success: bool
+    message: str
+    record: Optional[RepositoryStarRecordSchema] = None
+    records: Optional[List[RepositoryStarRecordSchema]] = None
+
+
+class RepositoryStarExecuteRequest(BaseModel):
+    github_account_ids: Optional[List[int]] = Field(None, description="要执行的GitHub账号ID列表，不传则执行所有未star的账号")
+
+
+class RepositoryStarExecuteResponse(BaseModel):
+    success: bool
+    message: str
+    total: int = Field(..., description="总执行数")
+    success_count: int = Field(..., description="成功数")
+    failed_count: int = Field(..., description="失败数")
+    already_starred_count: int = Field(default=0, description="已收藏数")
+    details: Optional[List[Dict]] = Field(None, description="执行详情")
+
+
+class RepositoryBatchImportRequest(BaseModel):
+    repository_urls: List[str] = Field(..., description="仓库URL列表")
+    github_account_ids: List[int] = Field(..., description="要使用的GitHub账号ID列表")
+    execute_immediately: bool = Field(default=False, description="是否立即执行")

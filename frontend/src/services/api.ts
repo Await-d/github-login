@@ -3,7 +3,7 @@ import axios from 'axios';
 // 创建axios实例
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 300000, // 5 minutes timeout for long-running operations like Playwright
 });
 
 // 请求拦截器
@@ -196,6 +196,61 @@ export const apiWebsiteAPI = {
   // 获取账户信息
   getAccountInfo: (id: number) =>
     api.get(`/api-website/websites/${id}/account-info`),
+};
+
+// 仓库收藏接口
+export const repositoryStarAPI = {
+  // 获取所有仓库收藏任务
+  getTasks: () =>
+    api.get('/repository-star/tasks'),
+  
+  // 获取单个任务详情
+  getTask: (id: number) =>
+    api.get(`/repository-star/tasks/${id}`),
+  
+  // 创建仓库收藏任务
+  createTask: (data: {
+    repository_url: string;
+    description?: string;
+    github_account_ids: number[];
+    execute_immediately?: boolean;
+  }) =>
+    api.post('/repository-star/tasks', data),
+  
+  // 更新任务
+  updateTask: (id: number, data: {
+    repository_url?: string;
+    description?: string;
+  }) =>
+    api.put(`/repository-star/tasks/${id}`, data),
+  
+  // 删除任务
+  deleteTask: (id: number) =>
+    api.delete(`/repository-star/tasks/${id}`),
+  
+  // 手动执行任务
+  executeTask: (id: number, data?: {
+    github_account_ids?: number[];
+  }) =>
+    api.post(`/repository-star/tasks/${id}/execute`, data || {}),
+
+  // 取消收藏任务
+  unstarTask: (id: number, data?: {
+    github_account_ids?: number[];
+  }) =>
+    api.post(`/repository-star/tasks/${id}/unstar`, data || {}),
+
+  // 获取任务执行记录
+  getTaskRecords: (id: number) =>
+    api.get(`/repository-star/tasks/${id}/records`),
+  
+  // 批量导入仓库
+  batchImport: (data: {
+    repository_urls: string[];
+    github_account_ids: number[];
+    execute_immediately?: boolean;
+  }) =>
+    api.post('/repository-star/batch-import', data),
 };
 
 export default api;

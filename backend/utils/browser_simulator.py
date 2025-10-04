@@ -1619,9 +1619,19 @@ class BrowserSimulator:
                 # 提取余额信息
                 try:
                     print("🔍 开始提取账户余额信息...")
+
+                    # 先访问余额页面（Wallet页面）
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(current_url)
+                    balance_page_url = f"{parsed_url.scheme}://{parsed_url.netloc}/console/topup"
+
+                    print(f"📍 访问余额页面: {balance_page_url}")
+                    self.driver.get(balance_page_url)
+                    time.sleep(2)  # 等待页面加载
+
                     balance_extractor = BalanceExtractor(self.driver)
-                    balance_result = balance_extractor.extract_balance()
-                    
+                    balance_result = balance_extractor.extract_balance(console_url=balance_page_url)
+
                     if balance_result['success']:
                         session_data['balance'] = balance_result['balance']
                         session_data['balance_currency'] = balance_result['currency']
@@ -1631,7 +1641,7 @@ class BrowserSimulator:
                         session_data['balance'] = None
                         session_data['balance_extraction_error'] = balance_result.get('error', '未知错误')
                         print(f"⚠️ 余额提取失败: {balance_result.get('error', '未知错误')}")
-                        
+
                 except Exception as balance_error:
                     session_data['balance'] = None
                     session_data['balance_extraction_error'] = str(balance_error)

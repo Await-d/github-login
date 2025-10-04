@@ -1,9 +1,14 @@
 import React from 'react';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/LoginForm';
+import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
+import GitHubAccountManagement from './pages/GitHubAccountManagement';
+import RepositoryStarManagement from './pages/RepositoryStarManagement';
+import ScheduledTasksManagement from './pages/ScheduledTasksManagement';
+import ApiWebsiteManagement from './pages/ApiWebsiteManagement';
 import 'antd/dist/reset.css';
 import {
   BrowserRouter,
@@ -23,7 +28,7 @@ const AppContent: React.FC = () => {
         alignItems: 'center',
         height: '100vh'
       }}>
-        加载中...
+        <Spin size="large" tip="加载中..." />
       </div>
     );
   }
@@ -38,11 +43,18 @@ const AppContent: React.FC = () => {
           }
         />
         <Route
-          path="/dashboard"
+          path="/"
           element={
-            isAuthenticated ? <Dashboard /> : <Navigate to="/login" replace />
+            isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />
           }
-        />
+        >
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="github/accounts" element={<GitHubAccountManagement />} />
+          <Route path="github/repositories" element={<RepositoryStarManagement />} />
+          <Route path="automation/tasks" element={<ScheduledTasksManagement />} />
+          <Route path="automation/websites" element={<ApiWebsiteManagement />} />
+        </Route>
         <Route
           path="*"
           element={

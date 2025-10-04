@@ -37,6 +37,7 @@ APScheduler==3.10.4
 # 浏览器自动化
 selenium==4.15.2
 webdriver-manager==4.0.1
+playwright==1.40.0
 
 # 系统监控
 psutil==5.9.6
