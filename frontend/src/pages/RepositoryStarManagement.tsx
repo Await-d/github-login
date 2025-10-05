@@ -35,8 +35,7 @@ import {
   EditOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
-  RocketOutlined,
-  CloseOutlined
+  RocketOutlined
 } from '@ant-design/icons';
 import { repositoryStarAPI, githubAPI, githubGroupsAPI } from '../services/api';
 

@@ -226,7 +226,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
         // 从创建时间提取日期（格式：2025/7/13 10:30:45 -> 2025-07-13）
         const createdAtStr = parts[4].trim();
-        const dateMatch = createdAtStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        const dateMatch = createdAtStr.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
         if (dateMatch) {
           const [, year, month, day] = dateMatch;
           account.created_at = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
