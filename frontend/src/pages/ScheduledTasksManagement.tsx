@@ -199,7 +199,7 @@ const ScheduledTasksManagement: React.FC = () => {
     try {
       const response = await scheduledTasksAPI.runTask(id);
       loadingMessage();
-      
+
       if (response.data.success) {
         message.success('任务执行成功');
         loadTasks();
@@ -216,7 +216,7 @@ const ScheduledTasksManagement: React.FC = () => {
     setLogsModalVisible(true);
     setCurrentTaskLogs([]);
     setLogsLoading(true);
-    
+
     try {
       const response = await scheduledTasksAPI.getTaskLogs(task.id, 50);
       if (response.data.success) {
@@ -355,8 +355,8 @@ const ScheduledTasksManagement: React.FC = () => {
               <br />
               <Tooltip title={record.last_result}>
                 <Text type="secondary" ellipsis style={{ fontSize: '11px' }}>
-                  {record.last_result.length > 30 
-                    ? record.last_result.substring(0, 30) + '...' 
+                  {record.last_result.length > 30
+                    ? record.last_result.substring(0, 30) + '...'
                     : record.last_result}
                 </Text>
               </Tooltip>
@@ -463,7 +463,7 @@ const ScheduledTasksManagement: React.FC = () => {
   const totalTasks = tasks.length;
   const activeTasks = tasks.filter(t => t.is_active).length;
   const totalExecutions = tasks.reduce((sum, t) => sum + t.run_count, 0);
-  const successRate = totalExecutions > 0 
+  const successRate = totalExecutions > 0
     ? ((tasks.reduce((sum, t) => sum + t.success_count, 0) / totalExecutions) * 100).toFixed(1)
     : 0;
 

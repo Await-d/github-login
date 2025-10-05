@@ -191,7 +191,7 @@ const Dashboard: React.FC = () => {
         </Col>
       </Row>
 
-      <Card 
+      <Card
         title={
           <Space>
             <BulbOutlined style={{ color: '#1890ff' }} />
