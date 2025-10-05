@@ -32,7 +32,7 @@ import {
 } from '@ant-design/icons';
 import { scheduledTasksAPI, githubAPI } from '../services/api';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -469,6 +469,11 @@ const ScheduledTasksManagement: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
+      <Title level={2}>
+        <ClockCircleOutlined style={{ marginRight: 8 }} />
+        定时任务管理
+      </Title>
+
       {/* 统计卡片 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col span={6}>

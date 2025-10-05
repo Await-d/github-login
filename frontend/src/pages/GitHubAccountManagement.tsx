@@ -27,7 +27,8 @@ import {
   ImportOutlined,
   SearchOutlined,
   FilterOutlined,
-  ExportOutlined
+  ExportOutlined,
+  GithubOutlined
 } from '@ant-design/icons';
 import { githubAPI, githubGroupsAPI } from '../services/api';
 import GitHubAccountForm from '../components/GitHubAccountForm';
@@ -76,7 +77,7 @@ const GitHubAccountManagement: React.FC = () => {
   const [totpModalVisible, setTotpModalVisible] = useState(false);
   const [totpData, setTotpData] = useState<TOTPItem[]>([]);
   const [totpLoading, setTotpLoading] = useState(false);
-  const [countdown, setCountdown] = useState<{[key: number]: number}>({});
+  const [countdown, setCountdown] = useState<{ [key: number]: number }>({});
   const [batchImportVisible, setBatchImportVisible] = useState(false);
 
   const [singleTotpVisible, setSingleTotpVisible] = useState(false);
@@ -102,7 +103,7 @@ const GitHubAccountManagement: React.FC = () => {
     let interval: NodeJS.Timeout;
 
     if (totpModalVisible && totpData.length > 0) {
-      const initialCountdown: {[key: number]: number} = {};
+      const initialCountdown: { [key: number]: number } = {};
       totpData.forEach(item => {
         initialCountdown[item.id] = item.time_remaining;
       });
@@ -329,7 +330,7 @@ const GitHubAccountManagement: React.FC = () => {
       const response = await githubAPI.getAllTOTP();
       if (response.data.success) {
         setTotpData(response.data.accounts);
-        const newCountdown: {[key: number]: number} = {};
+        const newCountdown: { [key: number]: number } = {};
         response.data.accounts.forEach((item: TOTPItem) => {
           newCountdown[item.id] = item.time_remaining;
         });
@@ -587,7 +588,10 @@ const GitHubAccountManagement: React.FC = () => {
 
   return (
     <div>
-      <Title level={2}>GitHub账号管理</Title>
+      <Title level={2}>
+        <GithubOutlined style={{ marginRight: 8 }} />
+        GitHub账号管理
+      </Title>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={6}>
