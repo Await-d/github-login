@@ -28,10 +28,18 @@ const { TextArea } = Input;
 const { Dragger } = Upload;
 const { Text, Title } = Typography;
 
+interface GitHubGroup {
+  id: number;
+  name: string;
+  color: string | null;
+  account_count: number;
+}
+
 interface BatchImportModalProps {
   visible: boolean;
   onCancel: () => void;
   onSubmit: (data: any[]) => Promise<void>;
+  groups?: GitHubGroup[];
 }
 
 interface ParsedAccount {
@@ -39,6 +47,8 @@ interface ParsedAccount {
   password: string;
   totp_secret: string;
   created_at: string;
+  group_id?: number;
+  group_name?: string;
   status: 'valid' | 'invalid';
   errors?: string[];
 }
@@ -46,7 +56,8 @@ interface ParsedAccount {
 const BatchImportModal: React.FC<BatchImportModalProps> = ({
   visible,
   onCancel,
-  onSubmit
+  onSubmit,
+  groups = []
 }) => {
   const [activeTab, setActiveTab] = useState('text');
   const [textInput, setTextInput] = useState('');
@@ -156,26 +167,35 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
   const parseCSVData = (csvText: string): ParsedAccount[] => {
     const lines = csvText.trim().split('\n').filter(line => line.trim());
     const results: ParsedAccount[] = [];
-    
-    // 跳过标题行（如果有的话）
-    const dataLines = lines[0].includes('username') || lines[0].includes('用户名') ? lines.slice(1) : lines;
+
+    // 检查并跳过标题行
+    let startIndex = 0;
+    if (lines.length > 0) {
+      const firstLine = lines[0].toLowerCase();
+      if (firstLine.includes('username') || firstLine.includes('用户名')) {
+        startIndex = 1;
+      }
+    }
+
+    const dataLines = lines.slice(startIndex);
 
     dataLines.forEach((line, index) => {
       // 处理CSV格式，可能包含逗号分隔或分号分隔
       let parts: string[] = [];
-      
+
       if (line.includes('----')) {
         // 如果包含----分隔符，使用原来的解析方式
-        parts = line.split('----');
-      } else if (line.includes(',')) {
-        // 使用逗号分隔
-        parts = line.split(',').map(part => part.trim().replace(/"/g, ''));
-      } else if (line.includes(';')) {
-        // 使用分号分隔
-        parts = line.split(';').map(part => part.trim().replace(/"/g, ''));
+        parts = line.split('----').map(part => part.trim());
       } else {
-        // 尝试空白字符分隔
-        parts = line.split(/\s+/).filter(part => part.trim());
+        // 处理CSV中可能带引号的字段
+        // 简单处理：分割后去除引号
+        if (line.includes(',')) {
+          parts = line.split(',').map(part => part.trim().replace(/^"|"$/g, ''));
+        } else if (line.includes(';')) {
+          parts = line.split(';').map(part => part.trim().replace(/^"|"$/g, ''));
+        } else {
+          parts = line.split(/\s+/).filter(part => part.trim());
+        }
       }
 
       const account: ParsedAccount = {
@@ -187,36 +207,64 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         errors: []
       };
 
-      if (parts.length !== 4) {
-        account.status = 'invalid';
-        account.errors = [`第${index + 1}行：格式错误，应包含4个字段：用户名、密码、密钥、日期`];
-      } else {
+      // 根据列数判断格式
+      if (parts.length === 6) {
+        // 新导出格式: 用户名,密码,TOTP密钥,所属分组,创建时间,更新时间
+        account.username = parts[0].trim();
+        account.password = parts[1].trim();
+        account.totp_secret = parts[2].trim();
+
+        // 处理分组
+        const groupName = parts[3].trim();
+        if (groupName && groupName !== '' && groupName !== '未分组') {
+          account.group_name = groupName;
+          const group = groups.find(g => g.name === groupName);
+          if (group) {
+            account.group_id = group.id;
+          }
+        }
+
+        // 从创建时间提取日期（格式：2025/7/13 10:30:45 -> 2025-07-13）
+        const createdAtStr = parts[4].trim();
+        const dateMatch = createdAtStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        if (dateMatch) {
+          const [, year, month, day] = dateMatch;
+          account.created_at = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        } else {
+          account.created_at = createdAtStr;
+        }
+      } else if (parts.length === 4) {
+        // 旧格式: 用户名,密码,TOTP密钥,日期
         account.username = parts[0].trim();
         account.password = parts[1].trim();
         account.totp_secret = parts[2].trim();
         account.created_at = parts[3].trim();
+      } else {
+        account.status = 'invalid';
+        account.errors = [`第${index + 1}行：格式错误，应包含4列（旧格式）或6列（新导出格式）`];
+        results.push(account);
+        return;
+      }
 
-        // 数据验证
-        const errors: string[] = [];
-        if (!account.username) errors.push('用户名不能为空');
-        if (!account.password) errors.push('密码不能为空');
-        if (!account.totp_secret) errors.push('TOTP密钥不能为空');
-        if (!account.created_at) errors.push('日期不能为空');
-        
-        // TOTP密钥格式验证
-        if (account.totp_secret && !/^[A-Z2-7]{16,}$/.test(account.totp_secret)) {
-          errors.push('TOTP密钥格式无效');
-        }
+      // 数据验证
+      const errors: string[] = [];
+      if (!account.username) errors.push('用户名不能为空');
+      if (!account.password) errors.push('密码不能为空');
+      if (!account.totp_secret) errors.push('TOTP密钥不能为空');
 
-        // 日期格式验证
-        if (account.created_at && !/^\d{4}-\d{2}-\d{2}$/.test(account.created_at)) {
-          errors.push('日期格式无效，应为YYYY-MM-DD');
-        }
+      // TOTP密钥格式验证
+      if (account.totp_secret && !/^[A-Z2-7]{16,}$/.test(account.totp_secret)) {
+        errors.push('TOTP密钥格式无效');
+      }
 
-        if (errors.length > 0) {
-          account.status = 'invalid';
-          account.errors = errors;
-        }
+      // 日期格式验证（可选）
+      if (account.created_at && !/^\d{4}-\d{1,2}-\d{1,2}$/.test(account.created_at)) {
+        errors.push('日期格式无效，应为YYYY-MM-DD');
+      }
+
+      if (errors.length > 0) {
+        account.status = 'invalid';
+        account.errors = errors;
       }
 
       results.push(account);
@@ -284,6 +332,20 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
       render: (text: string) => text ? `${text.slice(0, 4)}...` : <Text type="secondary">未填写</Text>
     },
     {
+      title: '所属分组',
+      dataIndex: 'group_name',
+      key: 'group_name',
+      render: (text: string, record: ParsedAccount) => {
+        if (!text) {
+          return <Text type="secondary">未分组</Text>;
+        }
+        if (record.group_id) {
+          return <Tag color="blue">{text}</Tag>;
+        }
+        return <Tag color="warning">{text}（未找到）</Tag>;
+      }
+    },
+    {
       title: '日期',
       dataIndex: 'created_at',
       key: 'created_at',
@@ -321,7 +383,15 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
         <div>
           <Alert
             message="支持的数据格式"
-            description="账号----密码----密钥----日期（例：testuser----testpass123----ABCDEFGHIJKLMNOP----2025-07-13）"
+            description={
+              <div>
+                <div>• 旧格式（4列）：账号----密码----密钥----日期</div>
+                <div>• 新格式（6列）：用户名,密码,TOTP密钥,所属分组,创建时间,更新时间</div>
+                <div style={{ marginTop: 8, fontSize: '12px', color: '#666' }}>
+                  提示：直接导入从系统导出的CSV文件，会自动识别格式和分组信息
+                </div>
+              </div>
+            }
             type="info"
             showIcon
             style={{ marginBottom: 16 }}

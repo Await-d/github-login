@@ -23,6 +23,7 @@ from routes import auth, github, api_website, scheduled_tasks, repository_star, 
 from models.database import init_db, get_db
 from utils.task_scheduler import task_scheduler
 from utils.task_executor import execute_task
+from utils.db_migration import check_and_migrate_database
 import asyncio
 from datetime import datetime
 
@@ -89,6 +90,18 @@ async def lifespan(app: FastAPI):
     # 启动时初始化数据库
     print("🚀 初始化数据库...")
     init_db()
+    print("✅ 数据库表创建成功")
+
+    # 检查并迁移数据库（自动修复缺失字段）
+    print("🔧 检查数据库结构...")
+    success, migrations = check_and_migrate_database()
+    if success and migrations:
+        print(f"✅ 数据库迁移完成，应用了 {len(migrations)} 个更新")
+    elif success:
+        print("✅ 数据库结构完整")
+    else:
+        print("⚠️  数据库迁移出现警告，但系统将继续运行")
+
     print("✅ 数据库初始化完成")
 
     # 启动后台任务调度器

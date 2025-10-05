@@ -26,7 +26,8 @@ import {
   CopyOutlined,
   ImportOutlined,
   SearchOutlined,
-  FilterOutlined
+  FilterOutlined,
+  ExportOutlined
 } from '@ant-design/icons';
 import { githubAPI, githubGroupsAPI } from '../services/api';
 import GitHubAccountForm from '../components/GitHubAccountForm';
@@ -260,6 +261,48 @@ const GitHubAccountManagement: React.FC = () => {
       }
     } catch (error) {
       message.error('删除失败');
+    }
+  };
+
+  const handleExportAccounts = () => {
+    try {
+      // 获取当前筛选后的账号列表
+      const exportData = filteredAccounts.map(account => ({
+        用户名: account.username,
+        密码: account.password || '',
+        TOTP密钥: account.totp_secret || '',
+        所属分组: account.group_id ? groups.find(g => g.id === account.group_id)?.name || '' : '',
+        创建时间: new Date(account.created_at).toLocaleString('zh-CN'),
+        更新时间: new Date(account.updated_at).toLocaleString('zh-CN')
+      }));
+
+      // 转换为CSV格式
+      const headers = Object.keys(exportData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...exportData.map(row =>
+          headers.map(header => {
+            const value = row[header as keyof typeof row];
+            // 处理包含逗号的字段，用引号包裹
+            return value?.includes(',') ? `"${value}"` : value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // 创建Blob并下载
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `github_accounts_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      message.success(`成功导出 ${exportData.length} 个账号`);
+    } catch (error) {
+      message.error('导出失败');
     }
   };
 
@@ -604,6 +647,13 @@ const GitHubAccountManagement: React.FC = () => {
               批量导入
             </Button>
             <Button
+              icon={<ExportOutlined />}
+              onClick={handleExportAccounts}
+              disabled={filteredAccounts.length === 0}
+            >
+              导出账号
+            </Button>
+            <Button
               icon={<ReloadOutlined />}
               onClick={loadAccounts}
               loading={loading}
@@ -744,6 +794,7 @@ const GitHubAccountManagement: React.FC = () => {
         visible={batchImportVisible}
         onCancel={() => setBatchImportVisible(false)}
         onSubmit={handleBatchImport}
+        groups={groups}
       />
 
       <Modal
