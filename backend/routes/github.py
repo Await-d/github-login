@@ -65,7 +65,8 @@ async def create_github_account(
         username=account_data.username,
         encrypted_password=encrypted_password,
         encrypted_totp_secret=encrypted_totp_secret,
-        created_at=account_data.created_at
+        created_at=account_data.created_at,
+        group_id=account_data.group_id if hasattr(account_data, 'group_id') else None
     )
     
     db.add(new_account)
@@ -77,6 +78,7 @@ async def create_github_account(
         id=new_account.id,
         user_id=new_account.user_id,
         username=new_account.username,
+        group_id=new_account.group_id,
         created_at=new_account.created_at,
         updated_at=new_account.updated_at
     )
@@ -104,6 +106,7 @@ async def get_github_accounts(
             id=account.id,
             user_id=account.user_id,
             username=account.username,
+            group_id=account.group_id,
             created_at=account.created_at,
             updated_at=account.updated_at
         )
@@ -151,6 +154,7 @@ async def get_github_account(
         id=account.id,
         user_id=account.user_id,
         username=account.username,
+        group_id=account.group_id,
         password=decrypted_password,  # 真实密码
         totp_secret=decrypted_totp_secret,  # 真实密钥
         created_at=account.created_at,
@@ -202,6 +206,10 @@ async def update_github_account(
     if account_data.created_at is not None:
         account.created_at = account_data.created_at
     
+    # 更新分组信息
+    if hasattr(account_data, 'group_id'):
+        account.group_id = account_data.group_id
+    
     db.commit()
     db.refresh(account)
     
@@ -209,6 +217,7 @@ async def update_github_account(
         id=account.id,
         user_id=account.user_id,
         username=account.username,
+        group_id=account.group_id,
         created_at=account.created_at,
         updated_at=account.updated_at
     )
@@ -367,7 +376,8 @@ async def batch_import_github_accounts(
                 username=account_data.username,
                 encrypted_password=encrypted_password,
                 encrypted_totp_secret=encrypted_totp_secret,
-                created_at=account_data.created_at
+                created_at=account_data.created_at,
+                group_id=account_data.group_id if hasattr(account_data, 'group_id') else None
             )
             
             db.add(new_account)

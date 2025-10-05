@@ -42,12 +42,17 @@ async def task_scheduler_loop():
 
     while scheduler_running:
         try:
+            print(f"🔍 [{datetime.now()}] 开始检查待执行任务...")
+
             # 获取数据库会话
             db = next(get_db())
 
             try:
                 # 获取待执行的任务
+                print(f"🔍 正在查询待执行任务...")
                 pending_tasks = task_scheduler.get_pending_tasks(db, tolerance_seconds=30)
+
+                print(f"🔍 查询完成,找到 {len(pending_tasks)} 个待执行任务")
 
                 if pending_tasks:
                     print(f"📋 发现 {len(pending_tasks)} 个待执行任务")
@@ -66,10 +71,14 @@ async def task_scheduler_loop():
                             print(f"❌ 执行任务 {task.name} 时发生异常: {e}")
                             import traceback
                             traceback.print_exc()
+                else:
+                    print(f"💤 当前没有待执行任务")
+
             finally:
                 db.close()
 
             # 每30秒检查一次
+            print(f"⏰ 等待30秒后进行下次检查...")
             await asyncio.sleep(30)
 
         except Exception as e:
@@ -221,6 +230,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=port,
-        reload=True,
+        reload=False,  # 生产环境禁用reload,避免后台任务被取消
         log_level="info"
     )

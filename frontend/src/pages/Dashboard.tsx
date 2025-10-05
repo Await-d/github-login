@@ -94,12 +94,26 @@ const Dashboard: React.FC = () => {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <Title level={2}>
-          <RocketOutlined /> 仪表盘
-        </Title>
-        <Paragraph type="secondary">
-          欢迎使用GitHub账号管理系统，这里是您的控制中心
-        </Paragraph>
+        <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+          <div>
+            <Title level={2} style={{ margin: 0 }}>
+              <RocketOutlined /> 仪表盘
+            </Title>
+            <Paragraph type="secondary" style={{ margin: '8px 0 0 0' }}>
+              欢迎使用GitHub账号管理系统，这里是您的控制中心
+            </Paragraph>
+          </div>
+          <Button
+            type="primary"
+            icon={<GithubOutlined />}
+            href="https://github.com/Await-d/github-login"
+            target="_blank"
+            rel="noopener noreferrer"
+            size="large"
+          >
+            项目仓库
+          </Button>
+        </Space>
       </div>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

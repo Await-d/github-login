@@ -16,7 +16,11 @@ import {
   Descriptions,
   Statistic,
   Row,
-  Col
+  Col,
+  Alert,
+  Typography,
+  Divider,
+  List
 } from 'antd';
 import {
   PlusOutlined,
@@ -28,7 +32,11 @@ import {
   StarOutlined,
   GithubOutlined,
   StopOutlined,
-  EditOutlined
+  EditOutlined,
+  InfoCircleOutlined,
+  CheckCircleOutlined,
+  RocketOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import { repositoryStarAPI, githubAPI, githubGroupsAPI } from '../services/api';
 
@@ -99,6 +107,14 @@ const RepositoryStarManagement: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<RepositoryStarTask | null>(null);
   const [executionRecords, setExecutionRecords] = useState<ExecutionRecord[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
+
+  // 介绍卡片显示状态
+  const [showIntro, setShowIntro] = useState(() => {
+    const saved = localStorage.getItem('repo_star_intro_dismissed');
+    return saved !== 'true';
+  });
+
+  const { Title, Text, Paragraph } = Typography;
 
   // 全选状态
   const [addTaskSelectAll, setAddTaskSelectAll] = useState(false);
@@ -566,10 +582,115 @@ const RepositoryStarManagement: React.FC = () => {
         </Col>
       </Row>
 
+      {/* 功能介绍卡片 */}
+      {showIntro && (
+        <Alert
+          message={
+            <Space>
+              <RocketOutlined />
+              <Text strong>GitHub仓库收藏功能介绍</Text>
+            </Space>
+          }
+          description={
+            <div>
+              <Paragraph>
+                批量管理GitHub仓库收藏，让多个账号快速Star您指定的仓库。
+              </Paragraph>
+
+              <Title level={5}>
+                <CheckCircleOutlined /> 主要功能
+              </Title>
+              <List
+                size="small"
+                dataSource={[
+                  '批量添加仓库收藏任务',
+                  '选择指定的GitHub账号或分组执行',
+                  '支持立即执行或稍后手动执行',
+                  '查看详细的执行记录和状态',
+                  '快捷跳转到GitHub仓库页面'
+                ]}
+                renderItem={item => (
+                  <List.Item style={{ padding: '4px 0', border: 'none' }}>
+                    <Text>• {item}</Text>
+                  </List.Item>
+                )}
+              />
+
+              <Divider style={{ margin: '12px 0' }} />
+
+              <Title level={5}>
+                <InfoCircleOutlined /> 使用步骤
+              </Title>
+              <List
+                size="small"
+                dataSource={[
+                  { step: 1, text: '点击"添加任务"按钮，输入GitHub仓库URL（如：https://github.com/owner/repo）' },
+                  { step: 2, text: '选择要执行收藏的GitHub账号，可按分组选择' },
+                  { step: 3, text: '选择是否立即执行，或稍后点击"执行"按钮' },
+                  { step: 4, text: '点击"详情"查看每个账号的执行状态和结果' }
+                ]}
+                renderItem={item => (
+                  <List.Item style={{ padding: '4px 0', border: 'none' }}>
+                    <Text>
+                      <Tag color="blue">{item.step}</Tag>
+                      {item.text}
+                    </Text>
+                  </List.Item>
+                )}
+              />
+
+              <Divider style={{ margin: '12px 0' }} />
+
+              <Space wrap>
+                <Text type="secondary">
+                  <StarOutlined /> 提示：点击仓库名称可快速跳转到GitHub
+                </Text>
+                <Text type="secondary">
+                  <ImportOutlined /> 支持批量导入多个仓库URL
+                </Text>
+                <Text type="secondary">
+                  <ReloadOutlined /> 强制执行可重新收藏已成功的账号
+                </Text>
+              </Space>
+            </div>
+          }
+          type="info"
+          closable
+          onClose={() => {
+            setShowIntro(false);
+            localStorage.setItem('repo_star_intro_dismissed', 'true');
+          }}
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
       <Card
-        title="仓库收藏任务列表"
+        title={
+          <Space>
+            <span>仓库收藏任务列表</span>
+            <Button
+              type="link"
+              size="small"
+              icon={<GithubOutlined />}
+              href="https://github.com/Await-d/github-login"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ padding: 0 }}
+            >
+              项目仓库
+            </Button>
+          </Space>
+        }
         extra={
           <Space>
+            {!showIntro && (
+              <Button
+                icon={<InfoCircleOutlined />}
+                onClick={() => setShowIntro(true)}
+              >
+                使用帮助
+              </Button>
+            )}
             <Button
               icon={<ImportOutlined />}
               onClick={handleBatchImport}
