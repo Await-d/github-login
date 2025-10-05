@@ -8,7 +8,9 @@ import {
   Button,
   Space,
   List,
-  Tag
+  Tag,
+  Divider,
+  Alert
 } from 'antd';
 import {
   GithubOutlined,
@@ -16,7 +18,13 @@ import {
   ClockCircleOutlined,
   GlobalOutlined,
   ArrowRightOutlined,
-  RocketOutlined
+  RocketOutlined,
+  SafetyOutlined,
+  ThunderboltOutlined,
+  CalendarOutlined,
+  CloudOutlined,
+  BulbOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { githubAPI, scheduledTasksAPI, repositoryStarAPI, apiWebsiteAPI } from '../services/api';
@@ -182,6 +190,108 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <Card 
+        title={
+          <Space>
+            <BulbOutlined style={{ color: '#1890ff' }} />
+            <span>关于 GitHub Manager</span>
+          </Space>
+        }
+        bordered={false}
+        style={{ marginBottom: 24 }}
+      >
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div>
+            <Title level={4} style={{ marginTop: 0 }}>
+              🚀 智能账号管理与自动化平台
+            </Title>
+            <Paragraph>
+              <Text strong>GitHub Manager</Text> 是一个企业级的GitHub账号管理和自动化平台，专为开发者和团队设计。
+              通过智能化的浏览器模拟技术和强大的任务调度系统，实现GitHub账号的安全管理和第三方平台的自动化登录。
+            </Paragraph>
+          </div>
+
+          <Divider style={{ margin: '12px 0' }} />
+
+          <Row gutter={[24, 16]}>
+            <Col xs={24} md={12}>
+              <Title level={5}>⭐ 核心特色</Title>
+              <List
+                size="small"
+                dataSource={[
+                  { icon: <SafetyOutlined style={{ color: '#52c41a' }} />, text: '安全第一 - AES加密存储，JWT认证' },
+                  { icon: <ThunderboltOutlined style={{ color: '#faad14' }} />, text: '智能自动化 - 支持反爬虫检测' },
+                  { icon: <CalendarOutlined style={{ color: '#1890ff' }} />, text: '灵活调度 - Cron表达式支持' },
+                  { icon: <CloudOutlined style={{ color: '#722ed1' }} />, text: '多平台支持 - 支持主流OAuth平台' }
+                ]}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Space>
+                      {item.icon}
+                      <Text>{item.text}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Col>
+            <Col xs={24} md={12}>
+              <Title level={5}>✨ 核心功能</Title>
+              <List
+                size="small"
+                dataSource={[
+                  { icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, text: 'GitHub账号批量管理' },
+                  { icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, text: 'TOTP双因子认证' },
+                  { icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, text: 'OAuth自动登录' },
+                  { icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />, text: '定时任务调度' }
+                ]}
+                renderItem={(item) => (
+                  <List.Item>
+                    <Space>
+                      {item.icon}
+                      <Text>{item.text}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+            </Col>
+          </Row>
+
+          <Divider style={{ margin: '12px 0' }} />
+
+          <Alert
+            message="开源项目"
+            description={
+              <Space direction="vertical">
+                <Text>
+                  本项目完全开源，欢迎Star、Fork和贡献代码！
+                </Text>
+                <Space>
+                  <Button
+                    type="primary"
+                    icon={<GithubOutlined />}
+                    href="https://github.com/Await-d/github-login"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    访问GitHub仓库
+                  </Button>
+                  <Button
+                    icon={<StarOutlined />}
+                    href="https://github.com/Await-d/github-login"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    给个Star⭐
+                  </Button>
+                </Space>
+              </Space>
+            }
+            type="info"
+            showIcon
+          />
+        </Space>
+      </Card>
 
       <Card title="快速访问" bordered={false}>
         <List
