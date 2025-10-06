@@ -3,12 +3,19 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
-from models.database import get_db, User, ScheduledTask, TaskExecutionLog, GitHubAccount
+from models.database import (
+    get_db,
+    User,
+    ScheduledTask,
+    TaskExecutionLog,
+    GitHubAccount,
+    AccountBalanceSnapshot
+)
 from models.schemas import (
     ScheduledTaskCreate,
     ScheduledTaskUpdate,
@@ -17,11 +24,23 @@ from models.schemas import (
     TaskExecutionLogResponse,
     TaskExecutionLogSchema,
     CreateGitHubOAuthTaskRequest,
-    GitHubOAuthTaskParams
+    GitHubOAuthTaskParams,
+    AccountBalanceHistoryResponse,
+    AccountBalanceSnapshotSchema
 )
 from utils.auth import get_current_user
 
 router = APIRouter()
+
+
+def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 @router.get("/tasks", response_model=ScheduledTaskResponse)
@@ -47,14 +66,14 @@ async def get_scheduled_tasks(
                 timezone=task.timezone,
                 task_params=json.loads(task.task_params) if task.task_params else {},
                 is_active=task.is_active,
-                last_run_time=task.last_run_time,
-                next_run_time=task.next_run_time,
+                last_run_time=_ensure_utc(task.last_run_time),
+                next_run_time=_ensure_utc(task.next_run_time),
                 last_result=task.last_result,
                 run_count=task.run_count,
                 success_count=task.success_count,
                 error_count=task.error_count,
-                created_at=task.created_at,
-                updated_at=task.updated_at
+                created_at=_ensure_utc(task.created_at),
+                updated_at=_ensure_utc(task.updated_at)
             )
             task_schemas.append(task_schema)
         
@@ -100,14 +119,14 @@ async def get_scheduled_task(
             timezone=task.timezone,
             task_params=json.loads(task.task_params) if task.task_params else {},
             is_active=task.is_active,
-            last_run_time=task.last_run_time,
-            next_run_time=task.next_run_time,
+            last_run_time=_ensure_utc(task.last_run_time),
+            next_run_time=_ensure_utc(task.next_run_time),
             last_result=task.last_result,
             run_count=task.run_count,
             success_count=task.success_count,
             error_count=task.error_count,
-            created_at=task.created_at,
-            updated_at=task.updated_at
+            created_at=_ensure_utc(task.created_at),
+            updated_at=_ensure_utc(task.updated_at)
         )
         
         return ScheduledTaskResponse(
@@ -181,14 +200,14 @@ async def create_github_oauth_task(
             timezone=new_task.timezone,
             task_params=json.loads(new_task.task_params) if new_task.task_params else {},
             is_active=new_task.is_active,
-            last_run_time=new_task.last_run_time,
-            next_run_time=new_task.next_run_time,
+            last_run_time=_ensure_utc(new_task.last_run_time),
+            next_run_time=_ensure_utc(new_task.next_run_time),
             last_result=new_task.last_result,
             run_count=new_task.run_count,
             success_count=new_task.success_count,
             error_count=new_task.error_count,
-            created_at=new_task.created_at,
-            updated_at=new_task.updated_at
+            created_at=_ensure_utc(new_task.created_at),
+            updated_at=_ensure_utc(new_task.updated_at)
         )
         
         return ScheduledTaskResponse(
@@ -257,14 +276,14 @@ async def update_scheduled_task(
             timezone=task.timezone,
             task_params=json.loads(task.task_params) if task.task_params else {},
             is_active=task.is_active,
-            last_run_time=task.last_run_time,
-            next_run_time=task.next_run_time,
+            last_run_time=_ensure_utc(task.last_run_time),
+            next_run_time=_ensure_utc(task.next_run_time),
             last_result=task.last_result,
             run_count=task.run_count,
             success_count=task.success_count,
             error_count=task.error_count,
-            created_at=task.created_at,
-            updated_at=task.updated_at
+            created_at=_ensure_utc(task.created_at),
+            updated_at=_ensure_utc(task.updated_at)
         )
         
         return ScheduledTaskResponse(
@@ -381,8 +400,8 @@ async def get_task_execution_logs(
             log_schema = TaskExecutionLogSchema(
                 id=log.id,
                 task_id=log.task_id,
-                start_time=log.start_time,
-                end_time=log.end_time,
+                start_time=_ensure_utc(log.start_time),
+                end_time=_ensure_utc(log.end_time),
                 duration=log.duration,
                 status=log.status,
                 result_message=log.result_message,
@@ -401,6 +420,82 @@ async def get_task_execution_logs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取执行日志失败: {str(e)}"
+        )
+
+
+@router.get("/tasks/{task_id}/balance-history", response_model=AccountBalanceHistoryResponse)
+async def get_account_balance_history(
+    task_id: int,
+    account_id: Optional[int] = None,
+    limit: int = 200,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取任务关联账号的余额历史"""
+    # 验证任务归属
+    task = db.query(ScheduledTask).filter(
+        ScheduledTask.id == task_id,
+        ScheduledTask.user_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="定时任务未找到"
+        )
+
+    if account_id is not None:
+        account_exists = db.query(GitHubAccount).filter(
+            GitHubAccount.id == account_id,
+            GitHubAccount.user_id == current_user.id
+        ).first()
+        if not account_exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="GitHub账号未找到"
+            )
+
+    try:
+        safe_limit = max(1, min(limit, 500))
+
+        snapshots = (
+            db.query(AccountBalanceSnapshot)
+            .options(joinedload(AccountBalanceSnapshot.account))
+            .filter(AccountBalanceSnapshot.task_id == task_id)
+            .order_by(AccountBalanceSnapshot.snapshot_time.desc())
+        )
+
+        if account_id is not None:
+            snapshots = snapshots.filter(AccountBalanceSnapshot.account_id == account_id)
+
+        snapshot_records = snapshots.limit(safe_limit).all()
+
+        snapshot_schemas = [
+            AccountBalanceSnapshotSchema(
+                id=record.id,
+                task_id=record.task_id,
+                account_id=record.account_id,
+                account_username=record.account.username if record.account else None,
+                execution_log_id=record.execution_log_id,
+                snapshot_time=_ensure_utc(record.snapshot_time),
+                balance=record.balance,
+                currency=record.currency,
+                raw_text=record.raw_text,
+                extraction_error=record.extraction_error
+            )
+            for record in snapshot_records
+        ]
+
+        return AccountBalanceHistoryResponse(
+            success=True,
+            message="获取余额历史成功",
+            snapshots=snapshot_schemas
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取余额历史失败: {str(e)}"
         )
 
 

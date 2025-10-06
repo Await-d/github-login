@@ -39,10 +39,23 @@ def calculate_next_run_time(cron_expression: str, tz: str = "Asia/Shanghai", fro
         next_time = cron.get_next(datetime)
         
         # 转换为UTC时间存储
-        return next_time.astimezone(timezone.utc).replace(tzinfo=None)
+        return next_time.astimezone(timezone.utc)
     
     except Exception as e:
         raise ValueError(f"无效的cron表达式: {cron_expression}, 错误: {str(e)}")
+
+
+def _normalize_to_utc(value: datetime) -> datetime:
+    """确保传入的时间为UTC带时区的datetime"""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    raise TypeError("Unsupported datetime value type")
 
 
 def is_time_to_run(task_next_run_time: datetime, tolerance_seconds: int = 30) -> bool:
@@ -56,8 +69,9 @@ def is_time_to_run(task_next_run_time: datetime, tolerance_seconds: int = 30) ->
     Returns:
         是否应该执行
     """
-    now = datetime.utcnow()
-    time_diff = (now - task_next_run_time).total_seconds()
+    normalized_next = _normalize_to_utc(task_next_run_time)
+    now = datetime.now(timezone.utc)
+    time_diff = (now - normalized_next).total_seconds()
     
     # 在容忍范围内或已过执行时间
     return -tolerance_seconds <= time_diff <= tolerance_seconds * 2
@@ -184,14 +198,17 @@ class TaskScheduler:
         """
         from models.database import ScheduledTask
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # 查询应该执行的任务
+        upper_bound = now + timedelta(seconds=tolerance_seconds)
+        # 兼容数据库中以朴素datetime存储的情况
+        upper_bound_db = upper_bound.replace(tzinfo=None)
         tasks = db_session.query(ScheduledTask).filter(
             ScheduledTask.is_active == True,
-            ScheduledTask.next_run_time <= now + timedelta(seconds=tolerance_seconds)
+            ScheduledTask.next_run_time <= upper_bound_db
         ).all()
-        
+
         # 过滤掉正在运行的任务
         pending_tasks = [
             task for task in tasks 

@@ -371,6 +371,28 @@ class TaskExecutionLogResponse(BaseModel):
     logs: Optional[List[TaskExecutionLogSchema]] = None
 
 
+class AccountBalanceSnapshotSchema(BaseModel):
+    id: int
+    task_id: int
+    account_id: int
+    account_username: Optional[str] = None
+    execution_log_id: Optional[int] = None
+    snapshot_time: datetime
+    balance: Optional[float] = None
+    currency: Optional[str] = None
+    raw_text: Optional[str] = None
+    extraction_error: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AccountBalanceHistoryResponse(BaseModel):
+    success: bool
+    message: str
+    snapshots: List[AccountBalanceSnapshotSchema] = Field(default_factory=list)
+
+
 # GitHub OAuth定时任务专用模型
 class GitHubOAuthTaskParams(BaseModel):
     github_account_ids: List[int] = Field(..., description="GitHub账号ID列表")

@@ -4,11 +4,12 @@
 
 import json
 import asyncio
+import re
 from datetime import datetime, timezone
-from typing import Tuple, Any, Dict
+from typing import Tuple, Any, Dict, Optional
 from sqlalchemy.orm import Session
 
-from models.database import ScheduledTask, TaskExecutionLog, GitHubAccount
+from models.database import ScheduledTask, TaskExecutionLog, GitHubAccount, AccountBalanceSnapshot
 from models.schemas import GitHubOAuthTaskParams
 from utils.encryption import decrypt_data
 from utils.browser_simulator import BrowserSimulator
@@ -28,7 +29,7 @@ async def execute_task(task: ScheduledTask, db_session: Session) -> Tuple[bool, 
     Returns:
         (是否成功, 结果消息)
     """
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     execution_log = None
     
     # 使用监控器
@@ -49,14 +50,18 @@ async def execute_task(task: ScheduledTask, db_session: Session) -> Tuple[bool, 
             
             # 根据任务类型执行不同的逻辑
             if task.task_type == "github_oauth_login":
-                success, result, execution_data = await execute_github_oauth_task(task, db_session)
+                success, result, execution_data = await execute_github_oauth_task(
+                    task,
+                    db_session,
+                    execution_log=execution_log
+                )
             else:
                 success = False
                 result = f"未知的任务类型: {task.task_type}"
                 execution_data = {}
             
             # 记录执行结果
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             duration = (end_time - start_time).total_seconds()
             
             # 更新执行日志
@@ -95,20 +100,19 @@ async def execute_task(task: ScheduledTask, db_session: Session) -> Tuple[bool, 
             
             if execution_log:
                 # 更新执行日志
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
                 execution_log.end_time = end_time
                 
                 # 安全地计算持续时间
                 try:
-                    if isinstance(execution_log.start_time, str):
-                        # 如果start_time是字符串，需要解析
-                        start_time = datetime.fromisoformat(execution_log.start_time.replace('Z', '+00:00'))
-                        execution_log.duration = (end_time - start_time).total_seconds()
-                    elif isinstance(execution_log.start_time, datetime):
-                        # 如果start_time已经是datetime对象
-                        execution_log.duration = (end_time - execution_log.start_time).total_seconds()
+                    original_start = execution_log.start_time
+                    if isinstance(original_start, str):
+                        original_start = datetime.fromisoformat(original_start.replace('Z', '+00:00'))
+                    if isinstance(original_start, datetime):
+                        if original_start.tzinfo is None:
+                            original_start = original_start.replace(tzinfo=timezone.utc)
+                        execution_log.duration = (end_time - original_start).total_seconds()
                     else:
-                        # 其他情况，设置默认值
                         execution_log.duration = 0
                         print(f"⚠️ execution_log.start_time类型未知: {type(execution_log.start_time)}")
                 except Exception as duration_error:
@@ -134,7 +138,11 @@ async def execute_task(task: ScheduledTask, db_session: Session) -> Tuple[bool, 
             task_scheduler.mark_task_completed(task.id)
 
 
-async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) -> Tuple[bool, str, Dict]:
+async def execute_github_oauth_task(
+    task: ScheduledTask,
+    db_session: Session,
+    execution_log: Optional[TaskExecutionLog] = None
+) -> Tuple[bool, str, Dict]:
     """
     执行GitHub OAuth登录任务 - 增强版带监控和日志
     
@@ -166,8 +174,8 @@ async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) ->
         task_logger.log_task_start(task.id, task.name, total_count)
         
         for account in github_accounts:
-            account_start_time = datetime.utcnow()
-            
+            account_start_time = datetime.now(timezone.utc)
+
             try:
                 # 解密账号信息
                 username = account.username
@@ -187,7 +195,7 @@ async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) ->
                 )
                 
                 # 计算处理时间
-                account_end_time = datetime.utcnow()
+                account_end_time = datetime.now(timezone.utc)
                 account_duration = (account_end_time - account_start_time).total_seconds()
                 
                 # 创建账户执行结果
@@ -228,18 +236,26 @@ async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) ->
                     "balance_raw_text": session_data.get('balance_raw_text'),
                     "balance_extraction_error": session_data.get('balance_extraction_error')
                 }
-                
+
                 results.append(account_result)
-                
+
                 if login_success:
                     success_count += 1
                 else:
                     # 记录错误类型
                     account_execution_result.error_type = 确定错误类型(message)
-                
+
+                _record_account_balance_snapshot(
+                    db_session,
+                    task,
+                    execution_log,
+                    account,
+                    account_result
+                )
+
             except Exception as e:
                 # 计算处理时间
-                account_end_time = datetime.utcnow()
+                account_end_time = datetime.now(timezone.utc)
                 account_duration = (account_end_time - account_start_time).total_seconds()
                 
                 # 创建异常结果
@@ -270,6 +286,14 @@ async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) ->
                     "error_type": "system_exception"
                 }
                 results.append(account_result)
+
+                _record_account_balance_snapshot(
+                    db_session,
+                    task,
+                    execution_log,
+                    account,
+                    account_result
+                )
         
         # 记录任务完成
         # 安全地计算任务持续时间
@@ -293,7 +317,7 @@ async def execute_github_oauth_task(task: ScheduledTask, db_session: Session) ->
                         start_time = datetime.fromisoformat(str(start_timestamp))
                     
                     # 计算持续时间
-                    task_duration = (datetime.utcnow() - start_time).total_seconds()
+                    task_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
                 else:
                     print("⚠️ 未找到任务开始时间记录，使用默认值")
                     task_duration = 0
@@ -619,3 +643,52 @@ def execute_github_oauth_with_browser_simulator(
 
 # 全局任务执行器实例
 task_executor = TaskExecutor()
+
+
+def _record_account_balance_snapshot(
+    db_session: Session,
+    task: ScheduledTask,
+    execution_log: Optional[TaskExecutionLog],
+    account: GitHubAccount,
+    account_result: Dict[str, Any]
+) -> None:
+    """将账户余额信息持久化为快照"""
+    balance_value = account_result.get("balance")
+    parsed_balance = _parse_balance_value(balance_value)
+    snapshot = AccountBalanceSnapshot(
+        task_id=task.id,
+        execution_log_id=execution_log.id if execution_log else None,
+        account_id=account.id,
+        snapshot_time=datetime.now(timezone.utc),
+        balance=parsed_balance,
+        currency=account_result.get("balance_currency"),
+        raw_text=account_result.get("balance_raw_text") or account_result.get("message"),
+        extraction_error=account_result.get("balance_extraction_error") or account_result.get("error")
+    )
+    db_session.add(snapshot)
+    try:
+        db_session.flush()
+        db_session.commit()
+    except Exception as commit_error:
+        db_session.rollback()
+        print(f"⚠️ 保存余额快照失败: {commit_error}")
+
+
+def _parse_balance_value(value: Any) -> Optional[float]:
+    """尽可能将余额值转为浮点数"""
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "")
+        match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+        if match:
+            try:
+                return float(match.group())
+            except ValueError:
+                return None
+
+    return None

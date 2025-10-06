@@ -189,6 +189,13 @@ export const scheduledTasksAPI = {
   getTaskLogs: (id: number, limit?: number) =>
     api.get(`/scheduled-tasks/tasks/${id}/logs`, { params: { limit } }),
   
+  // 获取余额历史
+  getBalanceHistory: (
+    id: number,
+    params?: { account_id?: number; limit?: number }
+  ) =>
+    api.get(`/scheduled-tasks/tasks/${id}/balance-history`, { params }),
+
   // 切换任务状态
   toggleTask: (id: number) =>
     api.post(`/scheduled-tasks/tasks/${id}/toggle`),

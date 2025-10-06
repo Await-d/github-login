@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -17,7 +17,10 @@ import {
   Col,
   Statistic,
   Tooltip,
-  Divider
+  Divider,
+  Tabs,
+  Empty,
+  Spin
 } from 'antd';
 import {
   PlusOutlined,
@@ -31,6 +34,16 @@ import {
   HistoryOutlined
 } from '@ant-design/icons';
 import { scheduledTasksAPI, githubAPI } from '../services/api';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  Legend
+} from 'recharts';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -72,14 +85,31 @@ interface TaskLog {
   execution_data: any;
 }
 
+interface BalanceSnapshot {
+  id: number;
+  task_id: number;
+  account_id: number;
+  account_username?: string;
+  execution_log_id?: number;
+  snapshot_time: string;
+  balance: number | null;
+  currency?: string | null;
+  raw_text?: string | null;
+  extraction_error?: string | null;
+}
+
 const ScheduledTasksManagement: React.FC = () => {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [githubAccounts, setGithubAccounts] = useState<GitHubAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [currentTaskForLogs, setCurrentTaskForLogs] = useState<ScheduledTask | null>(null);
   const [currentTaskLogs, setCurrentTaskLogs] = useState<TaskLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [balanceHistory, setBalanceHistory] = useState<BalanceSnapshot[]>([]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [selectedAccountForChart, setSelectedAccountForChart] = useState<number | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const [form] = Form.useForm();
@@ -214,7 +244,10 @@ const ScheduledTasksManagement: React.FC = () => {
 
   const handleViewLogs = async (task: ScheduledTask) => {
     setLogsModalVisible(true);
+    setCurrentTaskForLogs(task);
     setCurrentTaskLogs([]);
+    setBalanceHistory([]);
+    setSelectedAccountForChart(null);
     setLogsLoading(true);
 
     try {
@@ -229,6 +262,71 @@ const ScheduledTasksManagement: React.FC = () => {
     } finally {
       setLogsLoading(false);
     }
+
+    loadBalanceHistory(task.id);
+  };
+
+  const loadBalanceHistory = async (taskId: number) => {
+    setBalanceLoading(true);
+    try {
+      const response = await scheduledTasksAPI.getBalanceHistory(taskId, { limit: 500 });
+      if (response.data.success) {
+        setBalanceHistory(response.data.snapshots || []);
+      } else {
+        message.error('获取余额历史失败');
+      }
+    } catch (error) {
+      message.error('获取余额历史失败');
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!balanceHistory.length) {
+      return;
+    }
+
+    if (selectedAccountForChart !== null && balanceHistory.some(item => item.account_id === selectedAccountForChart)) {
+      return;
+    }
+
+    setSelectedAccountForChart(balanceHistory[0].account_id);
+  }, [balanceHistory, selectedAccountForChart]);
+
+  const balanceAccountOptions = useMemo(() => {
+    const accountMap = new Map<number, string>();
+    balanceHistory.forEach(item => {
+      accountMap.set(item.account_id, item.account_username || `账号 ${item.account_id}`);
+    });
+    return Array.from(accountMap.entries())
+      .map(([id, username]) => ({ id, username }))
+      .sort((a, b) => a.username.localeCompare(b.username, 'zh-Hans-CN'));
+  }, [balanceHistory]);
+
+  const filteredBalanceHistory = useMemo(() => {
+    if (selectedAccountForChart === null) {
+      return balanceHistory;
+    }
+    return balanceHistory.filter(item => item.account_id === selectedAccountForChart);
+  }, [balanceHistory, selectedAccountForChart]);
+
+  const balanceChartData = useMemo(() => {
+    return filteredBalanceHistory
+      .filter(item => item.balance !== null && item.balance !== undefined)
+      .sort((a, b) => new Date(a.snapshot_time).getTime() - new Date(b.snapshot_time).getTime())
+      .map(item => ({
+        time: new Date(item.snapshot_time).toLocaleString('zh-CN', { hour12: false }),
+        balance: item.balance as number,
+        currency: item.currency || ''
+      }));
+  }, [filteredBalanceHistory]);
+
+  const closeLogsModal = () => {
+    setLogsModalVisible(false);
+    setCurrentTaskForLogs(null);
+    setBalanceHistory([]);
+    setSelectedAccountForChart(null);
   };
 
   const handleEditTask = (task: ScheduledTask) => {
@@ -445,7 +543,7 @@ const ScheduledTasksManagement: React.FC = () => {
       title: '耗时',
       dataIndex: 'duration',
       key: 'duration',
-      render: (duration: number) => duration ? `${duration.toFixed(2)}s` : '-'
+      render: (duration: number) => (duration ? `${duration.toFixed(2)}s` : '-')
     },
     {
       title: '执行结果',
@@ -453,9 +551,60 @@ const ScheduledTasksManagement: React.FC = () => {
       key: 'result_message',
       render: (text: string) => (
         <Tooltip title={text}>
-          <Text ellipsis>{text?.length > 50 ? text.substring(0, 50) + '...' : text}</Text>
+          <Text ellipsis>{text?.length > 50 ? `${text.substring(0, 50)}...` : text}</Text>
         </Tooltip>
       )
+    }
+  ];
+
+  const balanceColumns = [
+    {
+      title: '账号',
+      dataIndex: 'account_username',
+      key: 'account_username',
+      render: (_: string, record: BalanceSnapshot) => record.account_username || `ID ${record.account_id}`
+    },
+    {
+      title: '记录时间',
+      dataIndex: 'snapshot_time',
+      key: 'snapshot_time',
+      render: (text: string) => new Date(text).toLocaleString('zh-CN')
+    },
+    {
+      title: '余额',
+      dataIndex: 'balance',
+      key: 'balance',
+      render: (value: number | null, record: BalanceSnapshot) => {
+        if (value === null || value === undefined) {
+          return record.extraction_error ? <Text type="danger">提取失败</Text> : '-';
+        }
+        const currency = record.currency || '';
+        return `${value.toFixed(2)}${currency ? ` ${currency}` : ''}`;
+      }
+    },
+    {
+      title: '原始数据',
+      dataIndex: 'raw_text',
+      key: 'raw_text',
+      render: (text: string | null) => (text ? (
+        <Tooltip title={text}>
+          <Text ellipsis style={{ maxWidth: 220, display: 'inline-block' }}>
+            {text.length > 20 ? `${text.substring(0, 20)}...` : text}
+          </Text>
+        </Tooltip>
+      ) : '-')
+    },
+    {
+      title: '错误信息',
+      dataIndex: 'extraction_error',
+      key: 'extraction_error',
+      render: (text: string | null) => (text ? (
+        <Tooltip title={text}>
+          <Text type="danger" ellipsis style={{ maxWidth: 220, display: 'inline-block' }}>
+            {text.length > 20 ? `${text.substring(0, 20)}...` : text}
+          </Text>
+        </Tooltip>
+      ) : '-')
     }
   ];
 
@@ -823,24 +972,106 @@ const ScheduledTasksManagement: React.FC = () => {
       <Modal
         title="任务执行日志"
         open={logsModalVisible}
-        onCancel={() => setLogsModalVisible(false)}
+        onCancel={closeLogsModal}
         footer={[
-          <Button key="close" onClick={() => setLogsModalVisible(false)}>
+          <Button key="close" onClick={closeLogsModal}>
             关闭
           </Button>
         ]}
         width={800}
       >
-        <Table
-          columns={logColumns}
-          dataSource={currentTaskLogs}
-          rowKey="id"
-          loading={logsLoading}
-          pagination={{
-            pageSize: 10,
-            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条日志`
-          }}
-          size="small"
+        <Tabs
+          defaultActiveKey="logs"
+          items={[
+            {
+              key: 'logs',
+              label: '执行日志',
+              children: (
+                <Table
+                  columns={logColumns}
+                  dataSource={currentTaskLogs}
+                  rowKey="id"
+                  loading={logsLoading}
+                  pagination={{
+                    pageSize: 10,
+                    showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条日志`
+                  }}
+                  size="small"
+                />
+              )
+            },
+            {
+              key: 'balance',
+              label: '余额趋势',
+              children: (
+                <div>
+                  {balanceLoading ? (
+                    <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                      <Spin />
+                    </div>
+                  ) : balanceHistory.length === 0 ? (
+                    <Empty description="暂无余额记录" />
+                  ) : (
+                    <>
+                      <Space style={{ marginBottom: 16 }}>
+                        <Select
+                          style={{ minWidth: 220 }}
+                          placeholder="选择账号"
+                          allowClear
+                          value={selectedAccountForChart ?? undefined}
+                          onChange={(value) => setSelectedAccountForChart((value as number | undefined) ?? null)}
+                        >
+                          {balanceAccountOptions.map(option => (
+                            <Option key={option.id} value={option.id}>
+                              {option.username}
+                            </Option>
+                          ))}
+                        </Select>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={() => currentTaskForLogs && loadBalanceHistory(currentTaskForLogs.id)}
+                        >
+                          刷新
+                        </Button>
+                      </Space>
+
+                      {balanceChartData.length > 0 ? (
+                        <div style={{ height: 280, marginBottom: 16 }}>
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={balanceChartData}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="time" minTickGap={20} />
+                              <YAxis />
+                              <RechartsTooltip
+                                formatter={(value: number | string) =>
+                                  typeof value === 'number' ? value.toFixed(2) : value
+                                }
+                              />
+                              <Legend />
+                              <Line type="monotone" dataKey="balance" name="余额" stroke="#1890ff" dot={{ r: 2 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <Empty description="暂无可绘制的余额数据" />
+                      )}
+
+                      <Table
+                        columns={balanceColumns}
+                        dataSource={filteredBalanceHistory}
+                        rowKey="id"
+                        size="small"
+                        pagination={{
+                          pageSize: 10,
+                          showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条记录`
+                        }}
+                      />
+                    </>
+                  )}
+                </div>
+              )
+            }
+          ]}
         />
       </Modal>
     </div>

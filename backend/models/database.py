@@ -80,6 +80,12 @@ class GitHubAccount(Base):
     owner = relationship("User", back_populates="github_accounts")
     # 关联分组
     group = relationship("GitHubAccountGroup", back_populates="accounts")
+    # 余额快照
+    balance_snapshots = relationship(
+        "AccountBalanceSnapshot",
+        back_populates="account",
+        cascade="all, delete-orphan"
+    )
 
 
 class ApiWebsite(Base):
@@ -114,7 +120,7 @@ class ApiWebsite(Base):
 class ScheduledTask(Base):
     """定时任务模型"""
     __tablename__ = "scheduled_tasks"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
@@ -142,15 +148,20 @@ class ScheduledTask(Base):
     # 时间字段
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     # 关联用户
     owner = relationship("User", back_populates="scheduled_tasks")
+    balance_snapshots = relationship(
+        "AccountBalanceSnapshot",
+        back_populates="task",
+        cascade="all, delete-orphan"
+    )
 
 
 class TaskExecutionLog(Base):
     """任务执行日志模型"""
     __tablename__ = "task_execution_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     task_id = Column(Integer, ForeignKey("scheduled_tasks.id"), nullable=False)
     
@@ -164,9 +175,34 @@ class TaskExecutionLog(Base):
     result_message = Column(Text)  # 执行结果消息
     error_details = Column(Text)  # 错误详情
     execution_data = Column(Text)  # JSON格式的执行数据
-    
+
     # 关联任务
     task = relationship("ScheduledTask", back_populates="execution_logs")
+    balance_snapshots = relationship(
+        "AccountBalanceSnapshot",
+        back_populates="execution_log",
+        cascade="all, delete-orphan"
+    )
+
+
+class AccountBalanceSnapshot(Base):
+    """账号余额快照"""
+    __tablename__ = "account_balance_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("scheduled_tasks.id"), nullable=False, index=True)
+    execution_log_id = Column(Integer, ForeignKey("task_execution_logs.id"), nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey("github_accounts.id"), nullable=False, index=True)
+    snapshot_time = Column(DateTime, default=func.now(), nullable=False)
+    balance = Column(Float)
+    currency = Column(String)
+    raw_text = Column(Text)
+    extraction_error = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+
+    task = relationship("ScheduledTask", back_populates="balance_snapshots")
+    execution_log = relationship("TaskExecutionLog", back_populates="balance_snapshots")
+    account = relationship("GitHubAccount", back_populates="balance_snapshots")
 
 
 # 导入仓库收藏模型

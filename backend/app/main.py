@@ -50,7 +50,7 @@ async def task_scheduler_loop():
             try:
                 # 获取待执行的任务
                 print(f"🔍 正在查询待执行任务...")
-                pending_tasks = task_scheduler.get_pending_tasks(db, tolerance_seconds=30)
+                pending_tasks = task_scheduler.get_pending_tasks(db, tolerance_seconds=10)
 
                 print(f"🔍 查询完成,找到 {len(pending_tasks)} 个待执行任务")
 
@@ -78,8 +78,8 @@ async def task_scheduler_loop():
                 db.close()
 
             # 每30秒检查一次
-            print(f"⏰ 等待30秒后进行下次检查...")
-            await asyncio.sleep(30)
+            print(f"⏰ 等待10秒后进行下次检查...")
+            await asyncio.sleep(10)
 
         except Exception as e:
             print(f"⚠️ 任务调度器循环异常: {e}")
