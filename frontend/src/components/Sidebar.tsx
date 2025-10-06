@@ -9,7 +9,9 @@ import {
   GlobalOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  FolderOutlined
+  FolderOutlined,
+  UserOutlined,
+  ScheduleOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -40,6 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
       children: [
         {
           key: '/github/accounts',
+          icon: <UserOutlined />,
           label: '账号管理',
           onClick: () => navigate('/github/accounts')
         },
@@ -64,6 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
       children: [
         {
           key: '/automation/tasks',
+          icon: <ScheduleOutlined />,
           label: '定时任务',
           onClick: () => navigate('/automation/tasks')
         },

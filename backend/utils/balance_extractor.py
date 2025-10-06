@@ -4,9 +4,23 @@
 """
 
 import re
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
 from selenium.webdriver.common.by import By
+
+
+CURRENCY_SYMBOL_MAP = {
+    "$": "USD",
+    "＄": "USD",
+    "US$": "USD",
+    "CN¥": "CNY",
+    "¥": "CNY",
+    "￥": "CNY",
+    "€": "EUR",
+    "£": "GBP"
+}
+
+CURRENCY_CODES = {"USD", "CNY", "EUR", "GBP"}
 
 
 class BalanceExtractor:
@@ -113,6 +127,8 @@ class BalanceExtractor:
             ("xpath", "//*[contains(text(), '当前余额')]/following::*[contains(@class, 'font-semibold')][1]"),
             ("xpath", "//*[contains(text(), '当前余额')]/following::div[contains(@class, 'text-lg')][1]"),
             # 次优先级：直接CSS选择器
+            ("css", "div.text-xl.font-semibold"),
+            ("css", ".text-xl.font-semibold"),
             ("css", "div.text-lg.font-semibold"),
             ("css", ".text-lg.font-semibold"),
             ("css", "*[class*='font-semibold']"),
@@ -166,24 +182,20 @@ class BalanceExtractor:
         
         try:
             page_source = self.driver.page_source
-            
-            # 优先查找带有"当前余额"或"Current balance"标签的金额（精确匹配）
-            context_patterns = [
-                # anyrouter.top 专用：精确匹配 "Current balance" 后的金额（允许HTML标签）
-                (r'Current.*?balance.*?\$(\d+\.\d{2})', 'USD'),
-                (r'current.*?balance.*?\$(\d+\.\d{2})', 'USD'),
-                (r'当前余额.*?\$(\d+\.\d{2})', 'USD'),
-                (r'账户余额.*?\$(\d+\.\d{2})', 'USD'),
-                (r'可用余额.*?\$(\d+\.\d{2})', 'USD'),
-            ]
-            
-            for pattern, curr in context_patterns:
-                matches = re.findall(pattern, page_source, re.IGNORECASE | re.DOTALL)
-                if matches:
-                    # 取第一个匹配（最可能是当前余额）
-                    balance_value = float(matches[0])
-                    raw_text = f"${matches[0]}"
-                    currency = curr
+
+            # 先在包含余额关键词的上下文中定位金额
+            keyword_pattern = re.compile(
+                r'(.{0,160}(?:当前余额|账户余额|可用余额|current balance|available balance|wallet).{0,160})',
+                re.IGNORECASE | re.DOTALL
+            )
+            keyword_sections = keyword_pattern.findall(page_source)
+
+            for section in keyword_sections:
+                candidate = self._select_amount_candidate(section)
+                if candidate:
+                    balance_value = candidate['value']
+                    currency = candidate['currency']
+                    raw_text = candidate['raw']
                     print(f"✅ 正则表达式（上下文）找到余额: {raw_text} (值: {balance_value} {currency})")
                     return {
                         "success": True,
@@ -192,54 +204,24 @@ class BalanceExtractor:
                         "raw_text": raw_text,
                         "extraction_method": "regex_with_context"
                     }
-            
-            # 如果上下文匹配失败，使用更智能的策略：查找所有金额但优先选择小额（更可能是剩余余额）
-            currency_patterns = [
-                (r'\$(\d+\.\d{2})', 'USD'),
-                (r'¥(\d+\.\d{2})', 'CNY'),
-                (r'€(\d+\.\d{2})', 'EUR'),
-                (r'£(\d+\.\d{2})', 'GBP'),
-            ]
-            
-            all_amounts = []
-            for pattern, curr in currency_patterns:
-                matches = re.findall(pattern, page_source)
-                for match in matches:
-                    value = float(match)
-                    all_amounts.append((value, curr, match))
-            
-            if all_amounts:
-                # 排序：优先选择较小的金额（通常是剩余余额而非历史消耗）
-                # 同时排除过小的金额（如0.01可能是示例）
-                valid_amounts = [(v, c, m) for v, c, m in all_amounts if 0.1 <= v <= 1000]
-                
-                if valid_amounts:
-                    # 选择最小的有效金额（更可能是当前余额）
-                    valid_amounts.sort(key=lambda x: x[0])
-                    balance_value, currency, match = valid_amounts[0]
-                    
-                    if currency == 'USD':
-                        raw_text = f"${match}"
-                    elif currency == 'CNY':
-                        raw_text = f"¥{match}"
-                    elif currency == 'EUR':
-                        raw_text = f"€{match}"
-                    elif currency == 'GBP':
-                        raw_text = f"£{match}"
-                    else:
-                        raw_text = str(match)
-                    
-                    print(f"✅ 正则表达式找到余额: {raw_text} (值: {balance_value} {currency})")
-                    return {
-                        "success": True,
-                        "balance": str(balance_value),
-                        "currency": currency,
-                        "raw_text": raw_text,
-                        "extraction_method": "regex_smart_selection"
-                    }
-            
+
+            # 如果关键词上下文未命中，回退到全局搜索
+            fallback_candidate = self._select_amount_candidate(page_source, prefer_smaller=True)
+            if fallback_candidate:
+                balance_value = fallback_candidate['value']
+                currency = fallback_candidate['currency']
+                raw_text = fallback_candidate['raw']
+                print(f"✅ 正则表达式找到余额: {raw_text} (值: {balance_value} {currency})")
+                return {
+                    "success": True,
+                    "balance": str(balance_value),
+                    "currency": currency,
+                    "raw_text": raw_text,
+                    "extraction_method": "regex_fallback"
+                }
+
             return {"success": False}
-            
+
         except Exception as e:
             print(f"❌ 正则表达式搜索异常: {str(e)}")
             return {"success": False}
@@ -320,57 +302,103 @@ class BalanceExtractor:
     def _parse_balance_text(self, text: str) -> Tuple[Optional[float], Optional[str]]:
         """解析余额文本，提取数值和货币类型"""
         try:
-            # 货币符号映射
-            currency_map = {
-                '$': 'USD',
-                '¥': 'CNY',
-                '€': 'EUR',
-                '£': 'GBP',
-                '￥': 'CNY',  # 全角人民币符号
-                '＄': 'USD'   # 全角美元符号
-            }
-            
-            # 提取货币符号
-            currency = "USD"  # 默认货币
-            for symbol, code in currency_map.items():
-                if symbol in text:
-                    currency = code
-                    break
-            
-            # 检查货币代码
-            if 'USD' in text:
-                currency = 'USD'
-            elif 'CNY' in text:
-                currency = 'CNY'
-            elif 'EUR' in text:
-                currency = 'EUR'
-            elif 'GBP' in text:
-                currency = 'GBP'
-            
-            # 提取数字
-            number_pattern = r'(\d+(?:,\d{3})*(?:\.\d{1,2})?)'
-            matches = re.findall(number_pattern, text)
-            
-            if matches:
-                # 取最大的数字（更可能是主要金额）
-                amounts = []
-                for match in matches:
-                    clean_amount = match.replace(',', '')
-                    try:
-                        amount = float(clean_amount)
-                        amounts.append(amount)
-                    except ValueError:
-                        continue
-                
-                if amounts:
-                    balance_value = max(amounts)  # 选择最大的金额
-                    return balance_value, currency
-            
-            return None, None
-            
+            candidates = self._extract_amount_candidates(text)
+            if not candidates:
+                return None, None
+
+            for candidate in candidates:
+                if candidate['has_explicit_currency']:
+                    return candidate['value'], candidate['currency']
+
+            best = candidates[0]
+            return best['value'], best['currency']
+
         except Exception as e:
             print(f"⚠️ 解析余额文本失败: {str(e)}")
             return None, None
+
+    def _extract_amount_candidates(self, text: str) -> List[Dict[str, Any]]:
+        """从文本中提取金额候选"""
+        if not text:
+            return []
+
+        amount_pattern = re.compile(
+            r'(?P<prefix_code>USD|CNY|EUR|GBP)?\s*'
+            r'(?P<symbol>US\$|CN¥|[$¥€£￥＄])?\s*'
+            r'(?P<value>-?\d{1,3}(?:,\d{3})*(?:\.\d{1,4})?)\s*'
+            r'(?P<suffix_code>USD|CNY|EUR|GBP)?',
+            re.IGNORECASE
+        )
+
+        candidates: List[Dict[str, Any]] = []
+
+        for match in amount_pattern.finditer(text):
+            raw_text = match.group(0).strip()
+            value_str = match.group('value')
+            if not value_str:
+                continue
+
+            clean_value = value_str.replace(',', '')
+            try:
+                value = float(clean_value)
+            except ValueError:
+                continue
+
+            prefix_code = match.group('prefix_code')
+            suffix_code = match.group('suffix_code')
+            symbol = match.group('symbol')
+
+            currency = self._determine_currency(symbol, prefix_code, suffix_code)
+
+            candidates.append({
+                'value': value,
+                'currency': currency,
+                'raw': raw_text,
+                'has_explicit_currency': bool(symbol) or bool(prefix_code) or bool(suffix_code) or (currency is not None and currency != 'USD')
+            })
+
+        for candidate in candidates:
+            if candidate['currency'] is None:
+                candidate['currency'] = 'USD'
+                candidate['has_explicit_currency'] = False
+
+        return candidates
+
+    def _determine_currency(self, symbol: Optional[str], prefix_code: Optional[str], suffix_code: Optional[str]) -> Optional[str]:
+        """根据符号或代码确定货币类型"""
+        if prefix_code:
+            code = prefix_code.upper()
+            if code in CURRENCY_CODES:
+                return code
+
+        if suffix_code:
+            code = suffix_code.upper()
+            if code in CURRENCY_CODES:
+                return code
+
+        if symbol:
+            normalized_symbol = symbol.strip()
+            if normalized_symbol in CURRENCY_SYMBOL_MAP:
+                return CURRENCY_SYMBOL_MAP[normalized_symbol]
+            upper_symbol = normalized_symbol.upper()
+            if upper_symbol in CURRENCY_SYMBOL_MAP:
+                return CURRENCY_SYMBOL_MAP[upper_symbol]
+
+        return None
+
+    def _select_amount_candidate(self, text: str, prefer_smaller: bool = False) -> Optional[Dict[str, Any]]:
+        """从文本中选择最合适的金额候选"""
+        candidates = self._extract_amount_candidates(text)
+        if not candidates:
+            return None
+
+        explicit_candidates = [c for c in candidates if c['has_explicit_currency']]
+        candidates_to_consider = explicit_candidates or candidates
+
+        if prefer_smaller:
+            candidates_to_consider = sorted(candidates_to_consider, key=lambda c: abs(c['value']))
+
+        return candidates_to_consider[0]
     
     def _get_parent_context(self, element) -> str:
         """获取元素的父级上下文"""
