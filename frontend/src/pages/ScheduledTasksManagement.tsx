@@ -287,12 +287,9 @@ const ScheduledTasksManagement: React.FC = () => {
       return;
     }
 
-    if (selectedAccountForChart !== null && balanceHistory.some(item => item.account_id === selectedAccountForChart)) {
-      return;
-    }
-
-    setSelectedAccountForChart(balanceHistory[0].account_id);
-  }, [balanceHistory, selectedAccountForChart]);
+    // 默认显示所有账号（selectedAccountForChart 保持为 null）
+    // 只有在用户手动选择后才会设置具体账号
+  }, [balanceHistory]);
 
   const balanceAccountOptions = useMemo(() => {
     const accountMap = new Map<number, string>();
@@ -312,15 +309,49 @@ const ScheduledTasksManagement: React.FC = () => {
   }, [balanceHistory, selectedAccountForChart]);
 
   const balanceChartData = useMemo(() => {
-    return filteredBalanceHistory
-      .filter(item => item.balance !== null && item.balance !== undefined)
-      .sort((a, b) => new Date(a.snapshot_time).getTime() - new Date(b.snapshot_time).getTime())
-      .map(item => ({
-        time: new Date(item.snapshot_time).toLocaleString('zh-CN', { hour12: false }),
-        balance: item.balance as number,
-        currency: item.currency || ''
-      }));
-  }, [filteredBalanceHistory]);
+    if (selectedAccountForChart === null) {
+      // 显示所有账号：按时间聚合数据
+      const timeMap = new Map<string, any>();
+
+      balanceHistory
+        .filter(item => item.balance !== null && item.balance !== undefined)
+        .forEach(item => {
+          const timeKey = new Date(item.snapshot_time).toLocaleString('zh-CN', { hour12: false });
+          const accountKey = item.account_username || `账号${item.account_id}`;
+
+          if (!timeMap.has(timeKey)) {
+            timeMap.set(timeKey, { time: timeKey, timestamp: new Date(item.snapshot_time).getTime() });
+          }
+
+          timeMap.get(timeKey)![accountKey] = item.balance;
+        });
+
+      return Array.from(timeMap.values())
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map(({ timestamp, ...rest }) => rest);
+    } else {
+      // 显示单个账号
+      return filteredBalanceHistory
+        .filter(item => item.balance !== null && item.balance !== undefined)
+        .sort((a, b) => new Date(a.snapshot_time).getTime() - new Date(b.snapshot_time).getTime())
+        .map(item => ({
+          time: new Date(item.snapshot_time).toLocaleString('zh-CN', { hour12: false }),
+          balance: item.balance as number,
+          currency: item.currency || ''
+        }));
+    }
+  }, [balanceHistory, filteredBalanceHistory, selectedAccountForChart]);
+
+  const accountLineColors = useMemo(() => {
+    const colors = [
+      '#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1',
+      '#13c2c2', '#eb2f96', '#fa8c16', '#a0d911', '#2f54eb'
+    ];
+    return balanceAccountOptions.map((account, index) => ({
+      accountKey: account.username,
+      color: colors[index % colors.length]
+    }));
+  }, [balanceAccountOptions]);
 
   const closeLogsModal = () => {
     setLogsModalVisible(false);
@@ -1016,7 +1047,7 @@ const ScheduledTasksManagement: React.FC = () => {
                       <Space style={{ marginBottom: 16 }}>
                         <Select
                           style={{ minWidth: 220 }}
-                          placeholder="选择账号"
+                          placeholder="选择账号（留空显示全部）"
                           allowClear
                           value={selectedAccountForChart ?? undefined}
                           onChange={(value) => setSelectedAccountForChart((value as number | undefined) ?? null)}
@@ -1048,7 +1079,23 @@ const ScheduledTasksManagement: React.FC = () => {
                                 }
                               />
                               <Legend />
-                              <Line type="monotone" dataKey="balance" name="余额" stroke="#1890ff" dot={{ r: 2 }} />
+                              {selectedAccountForChart === null ? (
+                                // 显示所有账号的折线
+                                accountLineColors.map(({ accountKey, color }) => (
+                                  <Line
+                                    key={accountKey}
+                                    type="monotone"
+                                    dataKey={accountKey}
+                                    name={accountKey}
+                                    stroke={color}
+                                    dot={{ r: 2 }}
+                                    connectNulls
+                                  />
+                                ))
+                              ) : (
+                                // 显示单个账号的折线
+                                <Line type="monotone" dataKey="balance" name="余额" stroke="#1890ff" dot={{ r: 2 }} />
+                              )}
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
