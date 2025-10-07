@@ -76,6 +76,9 @@ COPY backend/ /app/backend/
 # 从前端构建阶段复制构建好的文件
 COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
+# 创建数据目录并设置权限
+RUN mkdir -p /app/data && chmod 755 /app/data
+
 # 设置环境变量
 ENV PYTHONPATH=/app/backend
 ENV PORT=3000
