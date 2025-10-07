@@ -2,16 +2,49 @@
 数据库迁移工具 - 自动检测和修复缺失的字段
 """
 import sqlite3
-from typing import List, Tuple
+import os
+from typing import List, Tuple, Optional
 
 
-def check_and_migrate_database(db_path: str = '/app/data/github_manager.db'):
+def get_db_path() -> str:
+    """
+    从环境变量获取数据库文件路径
+
+    Returns:
+        数据库文件的绝对路径
+    """
+    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/github_manager.db")
+
+    # 如果是 sqlite:// 格式，提取文件路径
+    if database_url.startswith("sqlite:///"):
+        db_path = database_url.replace("sqlite:///", "/")
+    elif database_url.startswith("sqlite://"):
+        db_path = database_url.replace("sqlite://", "")
+    else:
+        # 如果不是以 sqlite:// 开头，说明是目录路径
+        db_path = os.path.join(database_url, "github_manager.db")
+
+    return db_path
+
+
+def check_and_migrate_database(db_path: Optional[str] = None):
     """
     检查并迁移数据库，确保所有必要的字段都存在
 
     Args:
-        db_path: 数据库文件路径
+        db_path: 数据库文件路径，如果为 None 则从环境变量读取
     """
+    if db_path is None:
+        db_path = get_db_path()
+
+    print(f"📁 使用数据库文件: {db_path}")
+
+    # 确保数据库目录存在
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+        print(f"📁 创建数据库目录: {db_dir}")
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
@@ -88,6 +121,39 @@ def check_and_migrate_database(db_path: str = '/app/data/github_manager.db'):
         else:
             print("  ℹ️  repository_star_records 表不存在（可能是新安装）")
 
+        # ===== 检查 account_balance_snapshots 表 =====
+        print("🔍 检查 account_balance_snapshots 表...")
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='account_balance_snapshots'")
+
+        if not cursor.fetchone():
+            print("  ⚠️  缺少 account_balance_snapshots 表，正在创建...")
+            cursor.execute("""
+                CREATE TABLE account_balance_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    execution_log_id INTEGER,
+                    account_id INTEGER NOT NULL,
+                    snapshot_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    balance FLOAT,
+                    currency VARCHAR,
+                    raw_text TEXT,
+                    extraction_error TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(task_id) REFERENCES scheduled_tasks(id),
+                    FOREIGN KEY(execution_log_id) REFERENCES task_execution_logs(id),
+                    FOREIGN KEY(account_id) REFERENCES github_accounts(id)
+                )
+            """)
+            # 创建索引以提升查询性能
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_balance_snapshot_task ON account_balance_snapshots(task_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_balance_snapshot_account ON account_balance_snapshots(account_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_balance_snapshot_execution ON account_balance_snapshots(execution_log_id)")
+            conn.commit()
+            migrations_applied.append("创建 account_balance_snapshots 表及索引")
+            print("  ✅ 成功创建 account_balance_snapshots 表")
+        else:
+            print("  ✅ account_balance_snapshots 表已存在")
+
         # 打印迁移摘要
         if migrations_applied:
             print("\n" + "="*60)
@@ -112,13 +178,19 @@ def check_and_migrate_database(db_path: str = '/app/data/github_manager.db'):
         conn.close()
 
 
-def get_database_info(db_path: str = '/app/data/github_manager.db') -> dict:
+def get_database_info(db_path: Optional[str] = None) -> dict:
     """
     获取数据库信息
+
+    Args:
+        db_path: 数据库文件路径，如果为 None 则从环境变量读取
 
     Returns:
         包含所有表和字段信息的字典
     """
+    if db_path is None:
+        db_path = get_db_path()
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
