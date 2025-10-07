@@ -17,9 +17,15 @@ def get_db_path() -> str:
 
     # 如果是 sqlite:// 格式，提取文件路径
     if database_url.startswith("sqlite:///"):
-        db_path = database_url.replace("sqlite:///", "/")
+        db_path = database_url.replace("sqlite:///", "", 1)
+        # 处理相对路径
+        if db_path.startswith("./"):
+            db_path = os.path.abspath(db_path)
+        elif not db_path.startswith("/"):
+            db_path = os.path.abspath(db_path)
     elif database_url.startswith("sqlite://"):
-        db_path = database_url.replace("sqlite://", "")
+        db_path = database_url.replace("sqlite://", "", 1)
+        db_path = os.path.abspath(db_path)
     else:
         # 如果不是以 sqlite:// 开头，说明是目录路径
         db_path = os.path.join(database_url, "github_manager.db")
@@ -53,18 +59,23 @@ def check_and_migrate_database(db_path: Optional[str] = None):
     try:
         # ===== 检查 github_accounts 表 =====
         print("🔍 检查 github_accounts 表...")
-        cursor.execute("PRAGMA table_info(github_accounts)")
-        columns = [column[1] for column in cursor.fetchall()]
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='github_accounts'")
 
-        # 检查 group_id 字段
-        if 'group_id' not in columns:
-            print("  ⚠️  缺少 group_id 字段，正在添加...")
-            cursor.execute("ALTER TABLE github_accounts ADD COLUMN group_id INTEGER")
-            conn.commit()
-            migrations_applied.append("添加 github_accounts.group_id 字段")
-            print("  ✅ 成功添加 group_id 字段")
+        if cursor.fetchone():
+            cursor.execute("PRAGMA table_info(github_accounts)")
+            columns = [column[1] for column in cursor.fetchall()]
+
+            # 检查 group_id 字段
+            if 'group_id' not in columns:
+                print("  ⚠️  缺少 group_id 字段，正在添加...")
+                cursor.execute("ALTER TABLE github_accounts ADD COLUMN group_id INTEGER")
+                conn.commit()
+                migrations_applied.append("添加 github_accounts.group_id 字段")
+                print("  ✅ 成功添加 group_id 字段")
+            else:
+                print("  ✅ group_id 字段已存在")
         else:
-            print("  ✅ group_id 字段已存在")
+            print("  ℹ️  github_accounts 表不存在（将由 init_db() 创建）")
 
         # ===== 检查 github_account_groups 表 =====
         print("🔍 检查 github_account_groups 表...")
