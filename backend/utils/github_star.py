@@ -135,7 +135,8 @@ async def star_github_repository(
     repo_name: str,
     github_username: str,
     github_password: str,
-    totp_secret: str
+    totp_secret: str,
+    force_execute: bool = False
 ) -> Tuple[bool, str]:
     """
     使用Playwright自动化Star GitHub仓库
@@ -146,6 +147,7 @@ async def star_github_repository(
         github_username: GitHub用户名
         github_password: GitHub密码
         totp_secret: TOTP密钥
+        force_execute: 是否强制执行（如果已收藏则先取消再重新收藏）
 
     Returns:
         (是否成功, 消息)
@@ -297,9 +299,44 @@ async def star_github_repository(
                     # 5. 执行Star操作
                     if 'starred' in button_text.lower() or 'unstar' in button_text.lower():
                         # 已经star过了
-                        print(f"✅ 仓库已经收藏过了")
-                        return True, f"仓库已收藏: {repo_owner}/{repo_name}"
-                    else:
+                        if force_execute:
+                            # 强制执行模式：先取消收藏再重新收藏
+                            print(f"🔄 强制执行模式：仓库已收藏，先取消再重新收藏")
+                            try:
+                                # 点击Unstar按钮
+                                await star_button.click()
+                                print(f"✅ 已取消收藏，等待2秒...")
+                                await asyncio.sleep(2)
+                                
+                                # 重新查找Star按钮
+                                star_button_found = False
+                                for selector in star_button_selectors:
+                                    try:
+                                        btn = await page.query_selector(selector)
+                                        if btn and await btn.is_visible():
+                                            button_text = (await btn.inner_text()).strip()
+                                            # 确保找到的是Star按钮而不是Starred按钮
+                                            if 'star' in button_text.lower() and 'starred' not in button_text.lower():
+                                                star_button = btn
+                                                star_button_found = True
+                                                print(f"✅ 找到Star按钮: {button_text}")
+                                                break
+                                    except:
+                                        continue
+                                
+                                if not star_button_found:
+                                    return False, "取消收藏后未找到Star按钮"
+                                
+                                # 继续执行收藏操作（下面的代码会处理）
+                            except Exception as unstar_error:
+                                return False, f"取消收藏失败: {str(unstar_error)}"
+                        else:
+                            # 普通模式：已收藏则直接返回
+                            print(f"✅ 仓库已经收藏过了")
+                            return True, f"仓库已收藏: {repo_owner}/{repo_name}"
+                    
+                    # 点击Star按钮（普通执行或强制执行取消后）
+                    if not ('starred' in button_text.lower() or 'unstar' in button_text.lower()) or force_execute:
                         # 点击Star按钮
                         print(f"⭐ 正在收藏仓库: {repo_owner}/{repo_name}")
                         try:
@@ -439,7 +476,8 @@ async def star_repository_simple(
     repo_url: str,
     github_username: str,
     github_password: str,
-    totp_secret: str
+    totp_secret: str,
+    force_execute: bool = False
 ) -> Tuple[bool, str]:
     """
     简化版的GitHub仓库Star操作（直接使用URL）
@@ -449,6 +487,7 @@ async def star_repository_simple(
         github_username: GitHub用户名
         github_password: GitHub密码
         totp_secret: TOTP密钥
+        force_execute: 是否强制执行（如果已收藏则先取消再重新收藏）
 
     Returns:
         (是否成功, 消息)
@@ -460,7 +499,7 @@ async def star_repository_simple(
         return False, f"无效的GitHub仓库URL: {repo_url}"
 
     # 调用主函数
-    return await star_github_repository(owner, repo_name, github_username, github_password, totp_secret)
+    return await star_github_repository(owner, repo_name, github_username, github_password, totp_secret, force_execute)
 
 
 async def unstar_github_repository(

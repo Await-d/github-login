@@ -56,19 +56,6 @@ async def _queue_executor(
             if not account:
                 continue
 
-            # 如果不是强制执行，检查是否已经成功star过
-            if not force_execute:
-                existing_success_record = db.query(RepositoryStarRecord).filter(
-                    RepositoryStarRecord.task_id == task_id,
-                    RepositoryStarRecord.github_account_id == account_id,
-                    RepositoryStarRecord.status.in_(["success", "already_starred"])
-                ).first()
-
-                if existing_success_record:
-                    print(f"⏭️ 账号 {account.username} 已经成功star过，跳过")
-                    already_starred_count += 1
-                    continue
-
             try:
                 # 解密账号信息
                 github_password = decrypt_data(account.encrypted_password)
@@ -79,7 +66,8 @@ async def _queue_executor(
                     repository_url,
                     account.username,
                     github_password,
-                    totp_secret
+                    totp_secret,
+                    force_execute
                 )
 
                 # 判断状态
@@ -237,7 +225,8 @@ async def create_repository_star_task(
                         task_data.repository_url,
                         account.username,
                         github_password,
-                        totp_secret
+                        totp_secret,
+                        False  # 创建任务时不强制执行
                     )
 
                     # 创建执行记录
@@ -575,7 +564,8 @@ async def batch_import_repository_star_tasks(
                             task.repository_url,
                             account.username,
                             github_password,
-                            totp_secret
+                            totp_secret,
+                            False  # 批量导入时不强制执行
                         )
 
                         record = RepositoryStarRecord(
