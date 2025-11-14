@@ -89,6 +89,10 @@ const RepositoryStarManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   
+  // 批量操作状态
+  const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [batchExecuting, setBatchExecuting] = useState(false);
+  
   // 添加任务对话框
   const [addTaskVisible, setAddTaskVisible] = useState(false);
   const [addTaskForm] = Form.useForm();
@@ -441,6 +445,39 @@ const RepositoryStarManagement: React.FC = () => {
       // 取消全选
       batchImportForm.setFieldsValue({ github_account_ids: [] });
     }
+  };
+
+  const handleBatchExecute = async (forceExecute: boolean = false) => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择要执行的任务');
+      return;
+    }
+
+    Modal.confirm({
+      title: forceExecute ? '确认批量强制执行' : '确认批量执行',
+      content: `${forceExecute ? '强制执行将重新对所有账号执行收藏操作。' : ''}即将执行 ${selectedRowKeys.length} 个任务，确定继续吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          setBatchExecuting(true);
+          const response = await repositoryStarAPI.batchExecute({
+            task_ids: selectedRowKeys,
+            force_execute: forceExecute
+          });
+
+          if (response.data.success) {
+            message.success(response.data.message || '批量执行任务已加入队列');
+            setSelectedRowKeys([]);
+            loadTasks();
+          }
+        } catch (error: any) {
+          message.error(error.response?.data?.detail || '批量执行失败');
+        } finally {
+          setBatchExecuting(false);
+        }
+      }
+    });
   };
 
   const handleBatchImportSubmit = async () => {
@@ -924,6 +961,28 @@ const RepositoryStarManagement: React.FC = () => {
         }
         extra={
           <Space wrap>
+            {selectedRowKeys.length > 0 && (
+              <>
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  onClick={() => handleBatchExecute(false)}
+                  loading={batchExecuting}
+                  size={isMobile ? 'small' : 'middle'}
+                >
+                  批量执行 ({selectedRowKeys.length})
+                </Button>
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => handleBatchExecute(true)}
+                  loading={batchExecuting}
+                  size={isMobile ? 'small' : 'middle'}
+                  style={{ backgroundColor: '#ff9800', borderColor: '#ff9800', color: '#fff' }}
+                >
+                  强制执行 ({selectedRowKeys.length})
+                </Button>
+              </>
+            )}
             {!showIntro && (
               <Button
                 icon={<InfoCircleOutlined />}
@@ -985,6 +1044,15 @@ const RepositoryStarManagement: React.FC = () => {
             dataSource={tasks}
             rowKey="id"
             loading={loading}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys as number[]),
+              selections: [
+                Table.SELECTION_ALL,
+                Table.SELECTION_INVERT,
+                Table.SELECTION_NONE,
+              ],
+            }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

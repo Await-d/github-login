@@ -304,6 +304,13 @@ export const repositoryStarAPI = {
     execute_immediately?: boolean;
   }) =>
     api.post('/repository-star/batch-import', data),
+
+  // 批量执行任务
+  batchExecute: (data: {
+    task_ids: number[];
+    force_execute?: boolean;
+  }) =>
+    api.post('/repository-star/batch-execute', data),
 };
 
 export default api;

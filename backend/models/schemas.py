@@ -522,3 +522,15 @@ class RepositoryBatchImportRequest(BaseModel):
     repository_urls: List[str] = Field(..., description="仓库URL列表")
     github_account_ids: List[int] = Field(..., description="要使用的GitHub账号ID列表")
     execute_immediately: bool = Field(default=False, description="是否立即执行")
+
+
+class RepositoryBatchExecuteRequest(BaseModel):
+    task_ids: List[int] = Field(..., description="要执行的任务ID列表")
+    force_execute: bool = Field(default=False, description="是否强制执行")
+
+
+class RepositoryBatchExecuteResponse(BaseModel):
+    success: bool
+    message: str
+    total_tasks: int = Field(..., description="总任务数")
+    queued_tasks: int = Field(..., description="已加入队列的任务数")
