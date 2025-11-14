@@ -293,7 +293,10 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
             totp_code = totp_info['token']
 
             # 填写TOTP验证码
-            totp_input = await page.query_selector('input#app_totp')
+            # 使用正确的选择器顺序，与定时任务登录保持一致
+            totp_input = await page.query_selector('input[name="app_otp"]')
+            if not totp_input:
+                totp_input = await page.query_selector('input#app_totp')
             if not totp_input:
                 totp_input = await page.query_selector('input[name="app_totp"]')
 

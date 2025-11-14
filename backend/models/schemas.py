@@ -164,6 +164,7 @@ class TOTPBatchResponse(BaseModel):
 class BaseResponse(BaseModel):
     success: bool
     message: str
+    data: Optional[Dict] = None
 
 
 class LoginResponse(BaseModel):
@@ -514,6 +515,7 @@ class RepositoryStarExecuteResponse(BaseModel):
     failed_count: int = Field(..., description="失败数")
     already_starred_count: int = Field(default=0, description="已收藏数")
     details: Optional[List[Dict]] = Field(None, description="执行详情")
+    queue_status: Optional[Dict] = Field(None, description="队列状态")
 
 
 class RepositoryBatchImportRequest(BaseModel):

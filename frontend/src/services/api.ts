@@ -284,7 +284,19 @@ export const repositoryStarAPI = {
   // 获取任务执行记录
   getTaskRecords: (id: number) =>
     api.get(`/repository-star/tasks/${id}/records`),
-  
+
+  // 获取任务队列状态
+  getQueueStatus: (id: number) =>
+    api.get(`/repository-star/tasks/${id}/queue-status`),
+
+  // 获取整体队列信息
+  getQueueInfo: () =>
+    api.get('/repository-star/queue/info'),
+
+  // 取消队列中的任务
+  cancelTask: (id: number) =>
+    api.post(`/repository-star/tasks/${id}/cancel`),
+
   // 批量导入仓库
   batchImport: (data: {
     repository_urls: string[];

@@ -24,8 +24,144 @@ from models.schemas import (
 from utils.auth import get_current_user
 from utils.encryption import decrypt_data
 from utils.github_star import parse_repository_url, star_repository_simple
+from utils.repository_star_queue import repository_star_queue
 
 router = APIRouter()
+
+
+# 队列执行器函数
+async def _queue_executor(
+    task_id: int,
+    user_id: int,
+    repository_url: str,
+    account_ids: list[int],
+    force_execute: bool
+) -> dict:
+    """队列任务执行器 - 实际执行star操作"""
+    from models.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        success_count = 0
+        failed_count = 0
+        already_starred_count = 0
+        details = []
+
+        for account_id in account_ids:
+            account = db.query(GitHubAccount).filter(
+                GitHubAccount.id == account_id,
+                GitHubAccount.user_id == user_id
+            ).first()
+
+            if not account:
+                continue
+
+            # 如果不是强制执行，检查是否已经成功star过
+            if not force_execute:
+                existing_success_record = db.query(RepositoryStarRecord).filter(
+                    RepositoryStarRecord.task_id == task_id,
+                    RepositoryStarRecord.github_account_id == account_id,
+                    RepositoryStarRecord.status.in_(["success", "already_starred"])
+                ).first()
+
+                if existing_success_record:
+                    print(f"⏭️ 账号 {account.username} 已经成功star过，跳过")
+                    already_starred_count += 1
+                    continue
+
+            try:
+                # 解密账号信息
+                github_password = decrypt_data(account.encrypted_password)
+                totp_secret = decrypt_data(account.encrypted_totp_secret)
+
+                # 执行star操作
+                success, message = await star_repository_simple(
+                    repository_url,
+                    account.username,
+                    github_password,
+                    totp_secret
+                )
+
+                # 判断状态
+                if success:
+                    if "已收藏" in message:
+                        record_status = "already_starred"
+                        already_starred_count += 1
+                    else:
+                        record_status = "success"
+                        success_count += 1
+                else:
+                    record_status = "failed"
+                    failed_count += 1
+
+                # 创建或更新执行记录
+                existing_record = db.query(RepositoryStarRecord).filter(
+                    RepositoryStarRecord.task_id == task_id,
+                    RepositoryStarRecord.github_account_id == account_id
+                ).first()
+
+                if existing_record:
+                    # 更新记录
+                    existing_record.status = record_status
+                    existing_record.error_message = None if success else message
+                    existing_record.executed_at = func.now()
+                else:
+                    # 创建新记录
+                    record = RepositoryStarRecord(
+                        task_id=task_id,
+                        github_account_id=account_id,
+                        status=record_status,
+                        error_message=None if success else message
+                    )
+                    db.add(record)
+
+                details.append({
+                    "account_id": account_id,
+                    "username": account.username,
+                    "status": record_status,
+                    "message": message
+                })
+
+            except Exception as e:
+                failed_count += 1
+                # 记录失败
+                existing_record = db.query(RepositoryStarRecord).filter(
+                    RepositoryStarRecord.task_id == task_id,
+                    RepositoryStarRecord.github_account_id == account_id
+                ).first()
+
+                if existing_record:
+                    existing_record.status = "failed"
+                    existing_record.error_message = str(e)
+                    existing_record.executed_at = func.now()
+                else:
+                    record = RepositoryStarRecord(
+                        task_id=task_id,
+                        github_account_id=account_id,
+                        status="failed",
+                        error_message=str(e)
+                    )
+                    db.add(record)
+
+                details.append({
+                    "account_id": account_id,
+                    "username": account.username,
+                    "status": "failed",
+                    "message": str(e)
+                })
+
+        db.commit()
+
+        return {
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "already_starred_count": already_starred_count,
+            "total": len(account_ids),
+            "details": details
+        }
+
+    finally:
+        db.close()
 
 
 @router.post("/tasks", response_model=RepositoryStarTaskResponse)
@@ -266,19 +402,19 @@ async def execute_repository_star_task(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """手动执行仓库收藏任务"""
-    
+    """手动执行仓库收藏任务（加入队列）"""
+
     task = db.query(RepositoryStarTask).filter(
         RepositoryStarTask.id == task_id,
         RepositoryStarTask.user_id == current_user.id
     ).first()
-    
+
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="任务不存在"
         )
-    
+
     # 确定要执行的账号列表
     if execute_data.github_account_ids:
         # 使用指定的账号
@@ -288,22 +424,8 @@ async def execute_repository_star_task(
         all_accounts = db.query(GitHubAccount).filter(
             GitHubAccount.user_id == current_user.id
         ).all()
+        account_ids = [acc.id for acc in all_accounts]
 
-        # 如果不是强制执行，需要排除已经star过的账号
-        if not execute_data.force_execute:
-            # 获取已经执行成功的账号ID
-            executed_account_ids = db.query(RepositoryStarRecord.github_account_id).filter(
-                RepositoryStarRecord.task_id == task_id,
-                RepositoryStarRecord.status == "success"
-            ).all()
-            executed_account_ids = [record[0] for record in executed_account_ids]
-
-            # 过滤出未执行的账号
-            account_ids = [acc.id for acc in all_accounts if acc.id not in executed_account_ids]
-        else:
-            # 强制执行，使用所有账号
-            account_ids = [acc.id for acc in all_accounts]
-    
     if not account_ids:
         return RepositoryStarExecuteResponse(
             success=False,
@@ -313,104 +435,24 @@ async def execute_repository_star_task(
             failed_count=0,
             already_starred_count=0
         )
-    
-    # 执行star操作
-    total = len(account_ids)
-    success_count = 0
-    failed_count = 0
-    already_starred_count = 0
-    details = []
-    
-    for account_id in account_ids:
-        account = db.query(GitHubAccount).filter(
-            GitHubAccount.id == account_id,
-            GitHubAccount.user_id == current_user.id
-        ).first()
-        
-        if not account:
-            continue
-        
-        try:
-            # 解密账号信息
-            github_password = decrypt_data(account.encrypted_password)
-            totp_secret = decrypt_data(account.encrypted_totp_secret)
-            
-            # 执行star操作
-            success, message = await star_repository_simple(
-                task.repository_url,
-                account.username,
-                github_password,
-                totp_secret
-            )
-            
-            # 判断状态
-            if success:
-                if "已收藏" in message:
-                    record_status = "already_starred"
-                    already_starred_count += 1
-                else:
-                    record_status = "success"
-                    success_count += 1
-            else:
-                record_status = "failed"
-                failed_count += 1
-            
-            # 创建或更新执行记录
-            existing_record = db.query(RepositoryStarRecord).filter(
-                RepositoryStarRecord.task_id == task_id,
-                RepositoryStarRecord.github_account_id == account_id
-            ).first()
-            
-            if existing_record:
-                # 更新记录
-                existing_record.status = record_status
-                existing_record.error_message = None if success else message
-            else:
-                # 创建新记录
-                record = RepositoryStarRecord(
-                    task_id=task_id,
-                    github_account_id=account_id,
-                    status=record_status,
-                    error_message=None if success else message
-                )
-                db.add(record)
-            
-            # 添加到详情列表
-            details.append({
-                "account_id": account_id,
-                "username": account.username,
-                "status": record_status,
-                "message": message
-            })
-            
-        except Exception as e:
-            failed_count += 1
-            # 记录失败
-            record = RepositoryStarRecord(
-                task_id=task_id,
-                github_account_id=account_id,
-                status="failed",
-                error_message=str(e)
-            )
-            db.add(record)
-            
-            details.append({
-                "account_id": account_id,
-                "username": account.username,
-                "status": "failed",
-                "message": str(e)
-            })
-    
-    db.commit()
-    
+
+    # 将任务加入队列
+    queue_task = await repository_star_queue.add_task(
+        task_id=task_id,
+        user_id=current_user.id,
+        repository_url=task.repository_url,
+        account_ids=account_ids,
+        force_execute=execute_data.force_execute
+    )
+
     return RepositoryStarExecuteResponse(
         success=True,
-        message=f"执行完成: 成功{success_count}个，失败{failed_count}个，已收藏{already_starred_count}个",
-        total=total,
-        success_count=success_count,
-        failed_count=failed_count,
-        already_starred_count=already_starred_count,
-        details=details
+        message=f"任务已加入队列，共{len(account_ids)}个账号待执行",
+        total=len(account_ids),
+        success_count=0,
+        failed_count=0,
+        already_starred_count=0,
+        queue_status=repository_star_queue.get_task_status(task_id)
     )
 
 
@@ -695,6 +737,89 @@ async def unstar_repository_task(
         already_starred_count=not_starred_count,
         details=details
     )
+
+
+@router.get("/tasks/{task_id}/queue-status")
+async def get_task_queue_status(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取任务的队列状态"""
+
+    # 验证任务是否属于当前用户
+    task = db.query(RepositoryStarTask).filter(
+        RepositoryStarTask.id == task_id,
+        RepositoryStarTask.user_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+
+    queue_status = repository_star_queue.get_task_status(task_id)
+
+    if not queue_status:
+        return BaseResponse(
+            success=True,
+            message="任务不在队列中",
+            data=None
+        )
+
+    return BaseResponse(
+        success=True,
+        message="获取队列状态成功",
+        data=queue_status
+    )
+
+
+@router.get("/queue/info")
+async def get_queue_info(
+    current_user: User = Depends(get_current_user)
+):
+    """获取队列信息（需要登录）"""
+    queue_info = repository_star_queue.get_queue_info()
+    return BaseResponse(
+        success=True,
+        message="获取队列信息成功",
+        data=queue_info
+    )
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task_in_queue(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """取消队列中的任务"""
+
+    # 验证任务是否属于当前用户
+    task = db.query(RepositoryStarTask).filter(
+        RepositoryStarTask.id == task_id,
+        RepositoryStarTask.user_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="任务不存在"
+        )
+
+    success = await repository_star_queue.cancel_task(task_id)
+
+    if success:
+        return BaseResponse(
+            success=True,
+            message="任务已取消"
+        )
+    else:
+        return BaseResponse(
+            success=False,
+            message="无法取消任务（任务可能已在执行或已完成）"
+        )
 
 
 def _get_task_with_stats(db: Session, task: RepositoryStarTask) -> RepositoryStarTaskWithStats:

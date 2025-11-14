@@ -24,6 +24,7 @@ from models.database import init_db, get_db
 from utils.task_scheduler import task_scheduler
 from utils.task_executor import execute_task
 from utils.db_migration import check_and_migrate_database
+from utils.repository_star_queue import repository_star_queue
 import asyncio
 from datetime import datetime
 
@@ -118,10 +119,23 @@ async def lifespan(app: FastAPI):
     background_scheduler_task = asyncio.create_task(task_scheduler_loop())
     print("✅ 后台任务调度器已启动")
 
+    # 启动仓库收藏任务队列
+    print("🚀 启动仓库收藏任务队列...")
+    # 从repository_star路由导入执行器函数
+    from routes.repository_star import _queue_executor
+    repository_star_queue.set_executor(_queue_executor)
+    await repository_star_queue.start()
+    print("✅ 仓库收藏任务队列已启动")
+
     yield
 
     # 关闭时的清理工作
     print("🛑 正在关闭应用...")
+
+    # 停止仓库收藏任务队列
+    print("🛑 停止仓库收藏任务队列...")
+    await repository_star_queue.stop()
+    print("✅ 仓库收藏任务队列已停止")
 
     # 停止后台任务调度器
     print("🛑 停止后台任务调度器...")

@@ -273,22 +273,108 @@ const RepositoryStarManagement: React.FC = () => {
 
   const handleExecuteTask = async (id: number, forceExecute: boolean = false) => {
     try {
-      const msgContent = forceExecute ? '正在强制执行收藏任务...' : '正在执行收藏任务...';
+      const msgContent = forceExecute ? '正在加入队列(强制执行)...' : '正在加入队列...';
       message.loading({ content: msgContent, key: 'execute', duration: 0 });
       const response = await repositoryStarAPI.executeTask(id, { force_execute: forceExecute });
 
       if (response.data.success) {
         const result = response.data;
-        message.success({
-          content: `执行完成: 成功${result.success_count}个，失败${result.failed_count}个，已收藏${result.already_starred_count}个`,
-          key: 'execute',
-          duration: 3
-        });
+
+        // 检查是否有队列状态信息
+        if (result.queue_status) {
+          const queueStatus = result.queue_status;
+          const queuePos = queueStatus.queue_position;
+
+          let statusMsg = '';
+          if (queuePos === 0) {
+            statusMsg = '任务正在执行中...';
+          } else if (queuePos && queuePos > 0) {
+            statusMsg = `任务已加入队列，前面还有 ${queuePos} 个任务`;
+          } else {
+            statusMsg = '任务已加入队列';
+          }
+
+          message.success({
+            content: statusMsg,
+            key: 'execute',
+            duration: 3
+          });
+
+          // 如果任务还在队列中，启动轮询
+          if (queueStatus.status === 'pending' || queueStatus.status === 'running') {
+            pollQueueStatus(id);
+          }
+        } else {
+          // 兼���旧版本响应（无队列状态）
+          message.success({
+            content: `执行完成: 成功${result.success_count}个，失败${result.failed_count}个，已收藏${result.already_starred_count}个`,
+            key: 'execute',
+            duration: 3
+          });
+        }
+
         loadTasks();
       }
     } catch (error: any) {
-      message.error({ content: '执行任务失败', key: 'execute' });
+      message.error({ content: '加入队列失败', key: 'execute' });
     }
+  };
+
+  // 轮询队列状态
+  const pollQueueStatus = async (taskId: number) => {
+    const maxAttempts = 300; // 最多轮询5分钟(每秒一次)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await repositoryStarAPI.getQueueStatus(taskId);
+
+        if (response.data.success && response.data.data) {
+          const queueStatus = response.data.data;
+
+          // 如果任务完成或失败，停止轮询
+          if (queueStatus.status === 'completed') {
+            message.success({
+              content: '任务执行完成！',
+              duration: 3
+            });
+            loadTasks();
+            return;
+          } else if (queueStatus.status === 'failed') {
+            message.error({
+              content: `任务执行失败: ${queueStatus.error || '未知错误'}`,
+              duration: 5
+            });
+            loadTasks();
+            return;
+          } else if (queueStatus.status === 'cancelled') {
+            message.warning({
+              content: '任务已被取消',
+              duration: 3
+            });
+            loadTasks();
+            return;
+          }
+
+          // 任务还在执行中，继续轮询
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 1000); // 1秒后再次轮询
+          } else {
+            message.warning({
+              content: '轮询超时，请手动刷新页面查看结果',
+              duration: 5
+            });
+          }
+        }
+      } catch (error) {
+        // 轮询出错，停止轮询
+        console.error('轮询队列状态失败:', error);
+      }
+    };
+
+    // 开始轮询
+    setTimeout(poll, 2000); // 2秒后开始第一次轮询
   };
 
   const handleUnstarTask = async (id: number) => {
