@@ -28,6 +28,11 @@ from utils.auth import get_current_user
 from utils.encryption import decrypt_data
 from utils.github_star import parse_repository_url, star_repository_simple
 from utils.repository_star_queue import repository_star_queue
+from utils.rate_limiter import (
+    check_batch_execute_rate_limit,
+    check_task_execute_rate_limit,
+    check_batch_import_rate_limit
+)
 
 router = APIRouter()
 
@@ -44,11 +49,12 @@ async def _queue_executor(
     from models.database import SessionLocal
     import random
 
-    # 配置参数
-    ACCOUNT_DELAY_MIN = 3  # 账号间最小延迟（秒）
-    ACCOUNT_DELAY_MAX = 8  # 账号间最大延迟（秒）
-    MAX_RETRY = 2  # 失败重试次数
-    RETRY_DELAY = 10  # 重试延迟（秒）
+    # 从配置文件读取参数
+    from utils.config import config
+    ACCOUNT_DELAY_MIN = config.ACCOUNT_DELAY_MIN
+    ACCOUNT_DELAY_MAX = config.ACCOUNT_DELAY_MAX
+    MAX_RETRY = config.MAX_RETRY
+    RETRY_DELAY = config.RETRY_DELAY
 
     db = SessionLocal()
     try:
@@ -414,6 +420,9 @@ async def execute_repository_star_task(
     db: Session = Depends(get_db)
 ):
     """手动执行仓库收藏任务（加入队列）"""
+    
+    # 速率限制检查
+    check_task_execute_rate_limit(current_user.id)
 
     task = db.query(RepositoryStarTask).filter(
         RepositoryStarTask.id == task_id,
@@ -524,11 +533,15 @@ async def batch_import_repository_star_tasks(
 ):
     """批量导入仓库收藏任务"""
     
+    # 速率限制检查
+    check_batch_import_rate_limit(current_user.id)
+    
     # 限制批量导入数量,防止滥用
-    if len(import_data.repository_urls) > 100:
+    from utils.config import config
+    if len(import_data.repository_urls) > config.MAX_BATCH_IMPORT_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="一次最多导入100个仓库"
+            detail=f"一次最多导入{config.MAX_BATCH_IMPORT_SIZE}个仓库"
         )
     
     created_tasks = []
@@ -633,6 +646,9 @@ async def batch_execute_repository_star_tasks(
     db: Session = Depends(get_db)
 ):
     """批量执行仓库收藏任务"""
+    
+    # 速率限制检查
+    check_batch_execute_rate_limit(current_user.id)
     
     if not execute_data.task_ids:
         raise HTTPException(

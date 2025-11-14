@@ -10,10 +10,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from models.database import get_db, User
 
-# JWT配置
-SECRET_KEY = "github_manager_jwt_secret_key_change_in_production"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24小时
+# JWT配置 - 从配置文件读取
+from utils.config import config
+
+SECRET_KEY = config.JWT_SECRET_KEY
+ALGORITHM = config.JWT_ALGORITHM
+ACCESS_TOKEN_EXPIRE_MINUTES = config.JWT_EXPIRE_MINUTES
 
 security = HTTPBearer()
 

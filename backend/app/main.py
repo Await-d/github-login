@@ -97,6 +97,10 @@ async def lifespan(app: FastAPI):
     """应用启动和关闭时的生命周期管理"""
     global background_scheduler_task, scheduler_running
 
+    # 打印配置信息和安全警告
+    from utils.config import config
+    config.print_config()
+    
     # 启动时初始化数据库
     print("🚀 初始化数据库...")
     init_db()
