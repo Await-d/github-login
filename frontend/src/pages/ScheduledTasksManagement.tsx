@@ -728,7 +728,7 @@ const ScheduledTasksManagement: React.FC = () => {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 'max-content' }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -1023,6 +1023,7 @@ const ScheduledTasksManagement: React.FC = () => {
                   dataSource={currentTaskLogs}
                   rowKey="id"
                   loading={logsLoading}
+                  scroll={{ x: 'max-content' }}
                   pagination={{
                     pageSize: 10,
                     showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条日志`
@@ -1108,6 +1109,7 @@ const ScheduledTasksManagement: React.FC = () => {
                         dataSource={filteredBalanceHistory}
                         rowKey="id"
                         size="small"
+                        scroll={{ x: 'max-content' }}
                         pagination={{
                           pageSize: 10,
                           showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 条记录`

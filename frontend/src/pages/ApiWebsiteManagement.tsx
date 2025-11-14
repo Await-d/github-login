@@ -384,6 +384,7 @@ const ApiWebsiteManagement: React.FC = () => {
           dataSource={websites}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 'max-content' }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
@@ -453,6 +454,7 @@ const ApiWebsiteManagement: React.FC = () => {
                   dataSource={currentAccountInfo.api_keys}
                   rowKey="id"
                   pagination={false}
+                  scroll={{ x: 'max-content' }}
                   columns={[
                     {
                       title: '名称',

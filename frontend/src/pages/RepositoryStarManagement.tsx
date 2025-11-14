@@ -1046,6 +1046,7 @@ const RepositoryStarManagement: React.FC = () => {
             dataSource={tasks}
             rowKey="id"
             loading={loading}
+            scroll={{ x: 'max-content' }}
             rowSelection={{
               selectedRowKeys,
               onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys as number[]),
@@ -1346,7 +1347,7 @@ const RepositoryStarManagement: React.FC = () => {
                 rowKey="id"
                 loading={recordsLoading}
                 pagination={false}
-                scroll={{ y: 400 }}
+                scroll={{ x: 'max-content', y: 400 }}
                 size="small"
               />
             </div>

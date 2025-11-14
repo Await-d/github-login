@@ -913,6 +913,7 @@ const GitHubAccountManagement: React.FC = () => {
             dataSource={filteredAccounts}
             rowKey="id"
             loading={loading}
+            scroll={{ x: 'max-content' }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
@@ -951,6 +952,7 @@ const GitHubAccountManagement: React.FC = () => {
           rowKey="id"
           loading={totpLoading}
           pagination={false}
+          scroll={{ x: 'max-content' }}
           size="middle"
         />
       </Modal>
