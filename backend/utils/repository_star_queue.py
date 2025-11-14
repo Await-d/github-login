@@ -22,9 +22,9 @@ class TaskStatus(str, Enum):
 @dataclass
 class QueueTask:
     """队列任务数据类"""
-    task_id: int
+    # 支持多个仓库，每个仓库有(task_id, repository_url)元组
+    task_items: list[tuple[int, str]]  # [(task_id, repository_url), ...]
     user_id: int
-    repository_url: str
     account_ids: list[int]
     force_execute: bool
     status: TaskStatus = TaskStatus.PENDING
@@ -37,6 +37,17 @@ class QueueTask:
     def __post_init__(self):
         if self.created_at is None:
             self.created_at = datetime.now(timezone.utc)
+
+    @property
+    def batch_id(self) -> str:
+        """生成批处理ID用于标识这个批量任务"""
+        task_ids = [str(t[0]) for t in self.task_items]
+        return f"batch_{'_'.join(task_ids)}"
+
+    @property
+    def task_count(self) -> int:
+        """返回包含的任务数量"""
+        return len(self.task_items)
 
 
 class RepositoryStarQueue:
@@ -98,35 +109,54 @@ class RepositoryStarQueue:
 
     async def add_task(
         self,
-        task_id: int,
         user_id: int,
-        repository_url: str,
         account_ids: list[int],
-        force_execute: bool = False
+        force_execute: bool = False,
+        task_id: int = None,
+        repository_url: str = None,
+        task_items: list[tuple[int, str]] = None
     ) -> QueueTask:
-        """添加任务到队列"""
+        """
+        添加任务到队列
 
-        # 检查任务是否已存在
-        if task_id in self._tasks:
-            existing_task = self._tasks[task_id]
+        支持两种方式：
+        1. 单个任务：task_id + repository_url
+        2. 批量任务：task_items = [(task_id, repository_url), ...]
+        """
+
+        # 确定任务项
+        if task_items:
+            # 批量任务模式
+            items = task_items
+            batch_id = f"batch_{'_'.join([str(t[0]) for t in task_items])}"
+        else:
+            # 单个任务模式
+            if not task_id or not repository_url:
+                raise ValueError("单个任务模式需要提供 task_id 和 repository_url")
+            items = [(task_id, repository_url)]
+            batch_id = f"task_{task_id}"
+
+        # 检查批处理是否已存在
+        if batch_id in self._tasks:
+            existing_task = self._tasks[batch_id]
             if existing_task.status in [TaskStatus.PENDING, TaskStatus.RUNNING]:
-                print(f"⚠️ 任务 {task_id} 已在队列中，状态: {existing_task.status}")
+                print(f"⚠️ 批处理 {batch_id} 已在队列中，状态: {existing_task.status}")
                 return existing_task
 
         # 创建新任务
         queue_task = QueueTask(
-            task_id=task_id,
+            task_items=items,
             user_id=user_id,
-            repository_url=repository_url,
             account_ids=account_ids,
             force_execute=force_execute
         )
 
-        self._tasks[task_id] = queue_task
+        self._tasks[batch_id] = queue_task
         await self._queue.put(queue_task)
 
         queue_size = self._queue.qsize()
-        print(f"✅ 任务 {task_id} 已加入队列 (队列大小: {queue_size})")
+        task_info = f"{len(items)} 个仓库任务" if len(items) > 1 else f"任务 {items[0][0]}"
+        print(f"✅ {task_info} 已加入队列 (队列大小: {queue_size})")
 
         return queue_task
 
@@ -170,11 +200,12 @@ class RepositoryStarQueue:
                 traceback.print_exc()
 
     async def _execute_task(self, queue_task: QueueTask):
-        """执行单个任务"""
-        task_id = queue_task.task_id
+        """执行单个批处理任务"""
+        batch_id = queue_task.batch_id
+        task_info = f"{len(queue_task.task_items)} 个仓库" if len(queue_task.task_items) > 1 else f"任务 {queue_task.task_items[0][0]}"
 
         try:
-            print(f"▶️ 开始执行任务 {task_id}: {queue_task.repository_url}")
+            print(f"▶️ 开始执行批处理 {batch_id}: {task_info}")
 
             # 更新任务状态
             queue_task.status = TaskStatus.RUNNING
@@ -184,11 +215,10 @@ class RepositoryStarQueue:
             if not self._executor:
                 raise Exception("任务执行器未设置")
 
-            # 执行任务（调用实际的star操作）
+            # 执行任务（调用新的按账号为中心的执行器）
             result = await self._executor(
-                task_id=task_id,
+                task_items=queue_task.task_items,
                 user_id=queue_task.user_id,
-                repository_url=queue_task.repository_url,
                 account_ids=queue_task.account_ids,
                 force_execute=queue_task.force_execute
             )
@@ -199,7 +229,7 @@ class RepositoryStarQueue:
             queue_task.result = result
 
             duration = (queue_task.completed_at - queue_task.started_at).total_seconds()
-            print(f"✅ 任务 {task_id} 执行完成 (耗时: {duration:.1f}秒)")
+            print(f"✅ 批处理 {batch_id} 执行完成 (耗时: {duration:.1f}秒)")
 
         except Exception as e:
             # 任务失败
@@ -207,37 +237,53 @@ class RepositoryStarQueue:
             queue_task.completed_at = datetime.now(timezone.utc)
             queue_task.error = str(e)
 
-            print(f"❌ 任务 {task_id} 执行失败: {e}")
+            print(f"❌ 批处理 {batch_id} 执行失败: {e}")
             import traceback
             traceback.print_exc()
 
-    def get_task_status(self, task_id: int) -> Optional[Dict[str, Any]]:
-        """获取任务状态"""
-        if task_id not in self._tasks:
+    def get_task_status(self, task_id: int = None, batch_id: str = None) -> Optional[Dict[str, Any]]:
+        """
+        获取任务状态
+
+        参数：
+        - task_id: 单个任务ID
+        - batch_id: 批处理ID (format: "batch_1_2_3" 或 "task_123")
+        """
+        # 确定查询key
+        if batch_id:
+            key = batch_id
+        elif task_id:
+            key = f"task_{task_id}"
+        else:
             return None
 
-        queue_task = self._tasks[task_id]
+        if key not in self._tasks:
+            return None
+
+        queue_task = self._tasks[key]
 
         return {
-            "task_id": queue_task.task_id,
+            "batch_id": key,
+            "task_ids": [str(t[0]) for t in queue_task.task_items],
+            "task_count": queue_task.task_count,
             "status": queue_task.status.value,
             "created_at": queue_task.created_at.isoformat() if queue_task.created_at else None,
             "started_at": queue_task.started_at.isoformat() if queue_task.started_at else None,
             "completed_at": queue_task.completed_at.isoformat() if queue_task.completed_at else None,
             "result": queue_task.result,
             "error": queue_task.error,
-            "queue_position": self._get_queue_position(task_id)
+            "queue_position": self._get_queue_position(key)
         }
 
-    def _get_queue_position(self, task_id: int) -> Optional[int]:
+    def _get_queue_position(self, batch_id: str) -> Optional[int]:
         """获取任务在队列中的位置（0表示正在执行，None表示不在队列中）"""
-        if self._running_task and self._running_task.task_id == task_id:
+        if self._running_task and self._running_task.batch_id == batch_id:
             return 0
 
         # 获取队列中等待的任务
         queue_items = list(self._queue._queue)
         for i, queue_task in enumerate(queue_items):
-            if queue_task.task_id == task_id:
+            if queue_task.batch_id == batch_id:
                 return i + 1  # +1 因为位置0是正在执行的任务
 
         return None

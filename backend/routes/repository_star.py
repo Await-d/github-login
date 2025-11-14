@@ -39,13 +39,19 @@ router = APIRouter()
 
 # 队列执行器函数
 async def _queue_executor(
-    task_id: int,
+    task_items: list[tuple[int, str]],
     user_id: int,
-    repository_url: str,
     account_ids: list[int],
     force_execute: bool
 ) -> dict:
-    """队列任务执行器 - 实际执行star操作（带智能策略）"""
+    """
+    队列任务执行器 - 按账号为中心执行star操作（带智能策略）
+
+    新策略：
+    1. 按账号循环（而不是按仓库循环）
+    2. 每个账号登录一次，执行所有仓库的收藏操作
+    3. 之后切换到下一个账号
+    """
     from models.database import SessionLocal
     import random
 
@@ -58,16 +64,18 @@ async def _queue_executor(
 
     db = SessionLocal()
     try:
-        success_count = 0
-        failed_count = 0
-        already_starred_count = 0
+        # 初始化统计
+        total_success_count = 0
+        total_failed_count = 0
+        total_already_starred_count = 0
         details = []
 
         # 随机打乱账号顺序，避免固定模式
         shuffled_account_ids = account_ids.copy()
         random.shuffle(shuffled_account_ids)
 
-        for idx, account_id in enumerate(shuffled_account_ids):
+        # ========== 新逻辑：按账号为中心 ==========
+        for account_idx, account_id in enumerate(shuffled_account_ids):
             account = db.query(GitHubAccount).filter(
                 GitHubAccount.id == account_id,
                 GitHubAccount.user_id == user_id
@@ -77,102 +85,130 @@ async def _queue_executor(
                 continue
 
             # 账号间延迟（除了第一个账号）
-            if idx > 0:
+            if account_idx > 0:
                 delay = random.uniform(ACCOUNT_DELAY_MIN, ACCOUNT_DELAY_MAX)
                 print(f"⏰ 账号间延迟 {delay:.1f} 秒...")
                 await asyncio.sleep(delay)
 
-            retry_count = 0
-            success = False
-            message = ""
-            
-            while retry_count <= MAX_RETRY:
-                try:
-                    # 解密账号信息
-                    github_password = decrypt_data(account.encrypted_password)
-                    totp_secret = decrypt_data(account.encrypted_totp_secret)
+            print(f"👤 开始执行账号: {account.username} ({account_idx + 1}/{len(shuffled_account_ids)})")
 
-                    # 执行star操作
-                    success, message = await star_repository_simple(
-                        repository_url,
-                        account.username,
-                        github_password,
-                        totp_secret,
-                        force_execute
-                    )
-                    
-                    # 如果成功或已收藏，跳出重试循环
-                    if success:
-                        break
-                    
-                    # 失败且还有重试机会
-                    if retry_count < MAX_RETRY:
-                        retry_count += 1
-                        print(f"⚠️ 账号 {account.username} 执行失败，{RETRY_DELAY}秒后进行第{retry_count}次重试...")
-                        await asyncio.sleep(RETRY_DELAY)
+            # 解密一次账号信息（为该账号的所有仓库操作服用）
+            try:
+                github_password = decrypt_data(account.encrypted_password)
+                totp_secret = decrypt_data(account.encrypted_totp_secret)
+            except Exception as e:
+                print(f"❌ 账号 {account.username} 解密失败: {e}")
+                for task_id, _ in task_items:
+                    details.append({
+                        "task_id": task_id,
+                        "account_id": account_id,
+                        "username": account.username,
+                        "status": "failed",
+                        "message": f"账号信息解密失败"
+                    })
+                continue
+
+            # 对该账号执行所有仓库的收藏操作
+            for repo_idx, (task_id, repository_url) in enumerate(task_items):
+                # 仓库间延迟（除了该账号的第一个仓库）
+                if repo_idx > 0:
+                    repo_delay = random.uniform(1, 3)  # 仓库间延迟较短
+                    print(f"  ⏰ 仓库间延迟 {repo_delay:.1f} 秒...")
+                    await asyncio.sleep(repo_delay)
+
+                print(f"  📦 执行仓库: {repository_url} ({repo_idx + 1}/{len(task_items)})")
+
+                retry_count = 0
+                success = False
+                message = ""
+
+                # 重试循环
+                while retry_count <= MAX_RETRY:
+                    try:
+                        # 执行star操作
+                        success, message = await star_repository_simple(
+                            repository_url,
+                            account.username,
+                            github_password,
+                            totp_secret,
+                            force_execute
+                        )
+
+                        # 如果成功或已收藏，跳出重试循环
+                        if success:
+                            break
+
+                        # 失败且还有重试机会
+                        if retry_count < MAX_RETRY:
+                            retry_count += 1
+                            print(f"  ⚠️ 仓库执行失败，{RETRY_DELAY}秒后进行第{retry_count}次重试...")
+                            await asyncio.sleep(RETRY_DELAY)
+                        else:
+                            break
+
+                    except Exception as e:
+                        # 异常处理
+                        import logging
+                        logging.error(f"账号 {account.username} 执行仓库 {repository_url} 异常: {type(e).__name__}", exc_info=True)
+                        message = f"执行失败: {type(e).__name__}"
+                        if retry_count < MAX_RETRY:
+                            retry_count += 1
+                            print(f"  ❌ 执行异常，{RETRY_DELAY}秒后进行第{retry_count}次重试...")
+                            await asyncio.sleep(RETRY_DELAY)
+                        else:
+                            print(f"  ❌ 重试{MAX_RETRY}次后仍失败")
+                            break
+
+                # 判断最终状态并记录
+                if success:
+                    if "已收藏" in message:
+                        record_status = "already_starred"
+                        total_already_starred_count += 1
                     else:
-                        break
-                        
-                except Exception as e:
-                    # 不直接暴露异��详情,避免泄露敏感信息
-                    import logging
-                    logging.error(f"账号 {account.username} 执行异常: {type(e).__name__}", exc_info=True)
-                    message = f"执行失败: {type(e).__name__}"
-                    if retry_count < MAX_RETRY:
-                        retry_count += 1
-                        print(f"❌ 账号 {account.username} 执行异常: {e}，{RETRY_DELAY}秒后进行第{retry_count}次重试...")
-                        await asyncio.sleep(RETRY_DELAY)
-                    else:
-                        print(f"❌ 账号 {account.username} 重试{MAX_RETRY}次后仍失败")
-                        break
-            
-            # 重试循环结束后，判断最终状态
-            if success:
-                if "已收藏" in message:
-                    record_status = "already_starred"
-                    already_starred_count += 1
+                        record_status = "success"
+                        total_success_count += 1
                 else:
-                    record_status = "success"
-                    success_count += 1
-            else:
-                record_status = "failed"
-                failed_count += 1
+                    record_status = "failed"
+                    total_failed_count += 1
 
-            # 创建或更新执行记录
-            existing_record = db.query(RepositoryStarRecord).filter(
-                RepositoryStarRecord.task_id == task_id,
-                RepositoryStarRecord.github_account_id == account_id
-            ).first()
+                # 创建或更新执行记录
+                existing_record = db.query(RepositoryStarRecord).filter(
+                    RepositoryStarRecord.task_id == task_id,
+                    RepositoryStarRecord.github_account_id == account_id
+                ).first()
 
-            if existing_record:
-                # 更新记录
-                existing_record.status = record_status
-                existing_record.error_message = None if success else message
-                existing_record.executed_at = func.now()
-            else:
-                # 创建新记录
-                record = RepositoryStarRecord(
-                    task_id=task_id,
-                    github_account_id=account_id,
-                    status=record_status,
-                    error_message=None if success else message
-                )
-                db.add(record)
+                if existing_record:
+                    # 更新记录
+                    existing_record.status = record_status
+                    existing_record.error_message = None if success else message
+                    existing_record.executed_at = func.now()
+                else:
+                    # 创建新记录
+                    record = RepositoryStarRecord(
+                        task_id=task_id,
+                        github_account_id=account_id,
+                        status=record_status,
+                        error_message=None if success else message
+                    )
+                    db.add(record)
 
-            details.append({
-                "account_id": account_id,
-                "username": account.username,
-                "status": record_status,
-                "message": message
-            })
+                details.append({
+                    "task_id": task_id,
+                    "account_id": account_id,
+                    "username": account.username,
+                    "status": record_status,
+                    "message": message
+                })
 
         db.commit()
 
         return {
-            "success_count": success_count,
-            "failed_count": failed_count,
-            "already_starred_count": already_starred_count,
-            "total": len(account_ids),
+            "success_count": total_success_count,
+            "failed_count": total_failed_count,
+            "already_starred_count": total_already_starred_count,
+            "total": len(account_ids) * len(task_items),
+            "task_count": len(task_items),
+            "account_count": len(account_ids),
             "details": details
         }
 
@@ -420,7 +456,7 @@ async def execute_repository_star_task(
     db: Session = Depends(get_db)
 ):
     """手动执行仓库收藏任务（加入队列）"""
-    
+
     # 速率限制检查
     check_task_execute_rate_limit(current_user.id)
 
@@ -456,24 +492,34 @@ async def execute_repository_star_task(
             already_starred_count=0
         )
 
-    # 将任务加入队列
-    queue_task = await repository_star_queue.add_task(
-        task_id=task_id,
-        user_id=current_user.id,
-        repository_url=task.repository_url,
-        account_ids=account_ids,
-        force_execute=execute_data.force_execute
-    )
+    # 将单个任务作为单项任务加入队列（兼容单个任务执行）
+    try:
+        queue_task = await repository_star_queue.add_task(
+            user_id=current_user.id,
+            account_ids=account_ids,
+            force_execute=execute_data.force_execute,
+            task_id=task_id,
+            repository_url=task.repository_url
+        )
 
-    return RepositoryStarExecuteResponse(
-        success=True,
-        message=f"任务已加入队列，共{len(account_ids)}个账号待执行",
-        total=len(account_ids),
-        success_count=0,
-        failed_count=0,
-        already_starred_count=0,
-        queue_status=repository_star_queue.get_task_status(task_id)
-    )
+        return RepositoryStarExecuteResponse(
+            success=True,
+            message=f"任务已加入队列，共{len(account_ids)}个账号待执行",
+            total=len(account_ids),
+            success_count=0,
+            failed_count=0,
+            already_starred_count=0,
+            queue_status=repository_star_queue.get_task_status(task_id=task_id)
+        )
+    except Exception as e:
+        return RepositoryStarExecuteResponse(
+            success=False,
+            message=f"任务加入队列失败: {str(e)}",
+            total=0,
+            success_count=0,
+            failed_count=0,
+            already_starred_count=0
+        )
 
 
 @router.get("/tasks/{task_id}/records", response_model=RepositoryStarRecordResponse)
@@ -646,62 +692,66 @@ async def batch_execute_repository_star_tasks(
     db: Session = Depends(get_db)
 ):
     """批量执行仓库收藏任务"""
-    
+
     # 速率限制检查
     check_batch_execute_rate_limit(current_user.id)
-    
+
     if not execute_data.task_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="任务ID列表不能为空"
         )
-    
+
     # 验证所有任务的所有权
     tasks = db.query(RepositoryStarTask).filter(
         RepositoryStarTask.id.in_(execute_data.task_ids),
         RepositoryStarTask.user_id == current_user.id
     ).all()
-    
+
     if len(tasks) != len(execute_data.task_ids):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="部分任务不存在或无权访问"
         )
-    
+
     # 获取所有用户的GitHub账号
     all_accounts = db.query(GitHubAccount).filter(
         GitHubAccount.user_id == current_user.id
     ).all()
     account_ids = [acc.id for acc in all_accounts]
-    
+
     if not account_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="没有可用的GitHub账号"
         )
-    
-    # 将所有任务加入队列
-    queued_count = 0
-    for task in tasks:
-        try:
-            await repository_star_queue.add_task(
-                task_id=task.id,
-                user_id=current_user.id,
-                repository_url=task.repository_url,
-                account_ids=account_ids,
-                force_execute=execute_data.force_execute
-            )
-            queued_count += 1
-        except Exception as e:
-            print(f"⚠️ 任务 {task.id} 加入队列失败: {e}")
-            continue
-    
-    return RepositoryBatchExecuteResponse(
-        success=True,
-        message=f"成功将 {queued_count} 个任务加入执行队列",
-        total_tasks=len(execute_data.task_ids),
-        queued_tasks=queued_count
-    )
+
+    # ========== 新逻辑：将所有任务作为一个批处理加入队列 ==========
+    # 构建任务项列表 [(task_id, repository_url), ...]
+    task_items = [(task.id, task.repository_url) for task in tasks]
+
+    try:
+        queue_task = await repository_star_queue.add_task(
+            user_id=current_user.id,
+            account_ids=account_ids,
+            force_execute=execute_data.force_execute,
+            task_items=task_items
+        )
+
+        batch_id = queue_task.batch_id
+
+        return RepositoryBatchExecuteResponse(
+            success=True,
+            message=f"成功将 {len(tasks)} 个仓库任务加入执行队列（按账号中心执行）",
+            total_tasks=len(execute_data.task_ids),
+            queued_tasks=len(execute_data.task_ids)
+        )
+    except Exception as e:
+        print(f"⚠️ 批处理加入队列失败: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"批处理加入队列失败: {str(e)}"
+        )
 
 
 @router.post("/tasks/{task_id}/unstar", response_model=RepositoryStarExecuteResponse)
