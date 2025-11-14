@@ -20,8 +20,10 @@ import {
   Alert,
   Typography,
   Divider,
-  List
+  List,
+  Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -35,7 +37,8 @@ import {
   EditOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
-  RocketOutlined
+  RocketOutlined,
+  MoreOutlined
 } from '@ant-design/icons';
 import { repositoryStarAPI, githubAPI, githubGroupsAPI } from '../services/api';
 
@@ -84,6 +87,7 @@ const RepositoryStarManagement: React.FC = () => {
   const [githubAccounts, setGithubAccounts] = useState<GitHubAccount[]>([]);
   const [groups, setGroups] = useState<GitHubGroup[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   
   // 添加任务对话框
   const [addTaskVisible, setAddTaskVisible] = useState(false);
@@ -123,6 +127,14 @@ const RepositoryStarManagement: React.FC = () => {
     loadTasks();
     loadGitHubAccounts();
     loadGroups();
+
+    // 监听窗口大小变化
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const loadTasks = async () => {
@@ -624,6 +636,150 @@ const RepositoryStarManagement: React.FC = () => {
     }
   ];
 
+  // 移动端卡片视图渲染
+  const renderMobileCard = (task: RepositoryStarTask) => {
+    const percentage = task.total_accounts > 0 
+      ? Math.round((task.starred_accounts / task.total_accounts) * 100)
+      : 0;
+
+    const getActionMenuItems = (record: RepositoryStarTask): MenuProps['items'] => [
+      {
+        key: 'execute',
+        label: '执行',
+        icon: <PlayCircleOutlined />,
+        onClick: () => handleExecuteTask(record.id, false)
+      },
+      {
+        key: 'force-execute',
+        label: '强制执行',
+        icon: <ReloadOutlined />,
+        onClick: () => {
+          Modal.confirm({
+            title: '确认强制执行',
+            content: '强制执行将重新对所有账号执行收藏操作，确定继续吗？',
+            okText: '确定',
+            cancelText: '取消',
+            onOk: () => handleExecuteTask(record.id, true)
+          });
+        }
+      },
+      {
+        key: 'unstar',
+        label: '取消收藏',
+        icon: <StopOutlined />,
+        danger: true,
+        onClick: () => handleUnstarTask(record.id)
+      },
+      {
+        key: 'edit',
+        label: '编辑',
+        icon: <EditOutlined />,
+        onClick: () => handleEditTask(record)
+      },
+      {
+        key: 'detail',
+        label: '详情',
+        icon: <EyeOutlined />,
+        onClick: () => handleViewDetail(record)
+      },
+      {
+        key: 'delete',
+        label: '删除',
+        icon: <DeleteOutlined />,
+        danger: true,
+        onClick: () => {
+          Modal.confirm({
+            title: '确认删除',
+            content: '确定要删除这个任务吗？',
+            okText: '确定',
+            cancelText: '取消',
+            onOk: () => handleDeleteTask(record.id)
+          });
+        }
+      }
+    ];
+
+    return (
+      <Card 
+        key={task.id}
+        style={{ marginBottom: 12 }}
+        size="small"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div>
+            <a 
+              href={task.repository_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ fontSize: '14px', fontWeight: 500 }}
+            >
+              <GithubOutlined /> {task.owner}/{task.repo_name}
+            </a>
+          </div>
+          
+          {task.description && (
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {task.description}
+            </Text>
+          )}
+
+          <div>
+            <div style={{ marginBottom: 4 }}>
+              <Text style={{ fontSize: '12px' }}>
+                收藏进度: {task.starred_accounts}/{task.total_accounts}
+              </Text>
+            </div>
+            <Progress 
+              percent={percentage} 
+              size="small"
+              status={percentage === 100 ? 'success' : 'active'}
+            />
+          </div>
+
+          <Space wrap size="small">
+            <Tag color="success">成功: {task.success_count}</Tag>
+            <Tag color="error">失败: {task.failed_count}</Tag>
+          </Space>
+
+          <Text type="secondary" style={{ fontSize: '11px' }}>
+            创建于: {new Date(task.created_at).toLocaleString('zh-CN', {
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+
+          <Space wrap size="small" style={{ width: '100%' }}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              onClick={() => handleExecuteTask(task.id, false)}
+            >
+              执行
+            </Button>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetail(task)}
+            >
+              详情
+            </Button>
+            <Dropdown 
+              menu={{ items: getActionMenuItems(task) }}
+              trigger={['click']}
+            >
+              <Button size="small" icon={<MoreOutlined />}>
+                更多
+              </Button>
+            </Dropdown>
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
   return (
     <div>
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -767,25 +923,28 @@ const RepositoryStarManagement: React.FC = () => {
           </Space>
         }
         extra={
-          <Space>
+          <Space wrap>
             {!showIntro && (
               <Button
                 icon={<InfoCircleOutlined />}
                 onClick={() => setShowIntro(true)}
+                size={isMobile ? 'small' : 'middle'}
               >
-                使用帮助
+                {isMobile ? '帮助' : '使用帮助'}
               </Button>
             )}
             <Button
               icon={<ImportOutlined />}
               onClick={handleBatchImport}
+              size={isMobile ? 'small' : 'middle'}
             >
-              批量导入
+              {isMobile ? '导入' : '批量导入'}
             </Button>
             <Button
               icon={<ReloadOutlined />}
               onClick={loadTasks}
               loading={loading}
+              size={isMobile ? 'small' : 'middle'}
             >
               刷新
             </Button>
@@ -793,24 +952,47 @@ const RepositoryStarManagement: React.FC = () => {
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddTask}
+              size={isMobile ? 'small' : 'middle'}
             >
-              添加任务
+              {isMobile ? '添加' : '添加任务'}
             </Button>
           </Space>
         }
       >
-        <Table
-          columns={columns}
-          dataSource={tasks}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`
-          }}
-        />
+        {isMobile ? (
+          // 移动端：卡片列表视图
+          <div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <ReloadOutlined spin style={{ fontSize: '24px' }} />
+              </div>
+            ) : tasks.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                <StarOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                <div>暂无任务</div>
+                <div style={{ fontSize: '12px', marginTop: '8px' }}>
+                  点击右上角"添加"按钮创建任务
+                </div>
+              </div>
+            ) : (
+              tasks.map(task => renderMobileCard(task))
+            )}
+          </div>
+        ) : (
+          // PC端：表格视图
+          <Table
+            columns={columns}
+            dataSource={tasks}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`
+            }}
+          />
+        )}
       </Card>
 
       {/* 添加任务对话框 */}

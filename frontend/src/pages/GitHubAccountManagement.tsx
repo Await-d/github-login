@@ -14,8 +14,11 @@ import {
   Progress,
   Input,
   DatePicker,
-  Select
+  Select,
+  Dropdown,
+  Tag
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
@@ -28,7 +31,8 @@ import {
   SearchOutlined,
   FilterOutlined,
   ExportOutlined,
-  GithubOutlined
+  GithubOutlined,
+  MoreOutlined
 } from '@ant-design/icons';
 import { githubAPI, githubGroupsAPI } from '../services/api';
 import GitHubAccountForm from '../components/GitHubAccountForm';
@@ -74,6 +78,7 @@ const GitHubAccountManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<GitHubAccount | undefined>();
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [totpModalVisible, setTotpModalVisible] = useState(false);
   const [totpData, setTotpData] = useState<TOTPItem[]>([]);
   const [totpLoading, setTotpLoading] = useState(false);
@@ -97,6 +102,14 @@ const GitHubAccountManagement: React.FC = () => {
   useEffect(() => {
     loadAccounts();
     loadGroups();
+
+    // 监听窗口大小变化
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
@@ -586,6 +599,121 @@ const GitHubAccountManagement: React.FC = () => {
     }
   ];
 
+  // 移动端卡片视图渲染
+  const renderMobileCard = (account: GitHubAccount) => {
+    const group = account.group_id ? groups.find(g => g.id === account.group_id) : null;
+
+    const getActionMenuItems = (record: GitHubAccount): MenuProps['items'] => [
+      {
+        key: 'totp',
+        label: 'TOTP验证码',
+        icon: <KeyOutlined />,
+        onClick: () => showSingleTOTP(record)
+      },
+      {
+        key: 'view',
+        label: '查看',
+        icon: <EyeOutlined />,
+        onClick: () => handleEditAccount(record.id)
+      },
+      {
+        key: 'edit',
+        label: '编辑',
+        icon: <EditOutlined />,
+        onClick: () => handleEditAccount(record.id)
+      },
+      {
+        key: 'delete',
+        label: '删除',
+        icon: <DeleteOutlined />,
+        danger: true,
+        onClick: () => {
+          Modal.confirm({
+            title: '确认删除',
+            content: `确定要删除账号 ${record.username} 吗？`,
+            okText: '确定',
+            cancelText: '取消',
+            onOk: () => handleDeleteAccount(record.id)
+          });
+        }
+      }
+    ];
+
+    return (
+      <Card 
+        key={account.id}
+        style={{ marginBottom: 12 }}
+        size="small"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <div>
+            <Text strong style={{ fontSize: '14px' }}>
+              <GithubOutlined /> {account.username}
+            </Text>
+          </div>
+
+          <div>
+            {group ? (
+              <Space size="small">
+                {group.color && (
+                  <div
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: group.color,
+                    }}
+                  />
+                )}
+                <Tag color="blue">{group.name}</Tag>
+              </Space>
+            ) : (
+              <Tag>未分组</Tag>
+            )}
+          </div>
+
+          <div>
+            <Text type="secondary" style={{ fontSize: '11px' }}>
+              创建: {new Date(account.created_at).toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </Text>
+          </div>
+
+          <Space wrap size="small" style={{ width: '100%' }}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<KeyOutlined />}
+              onClick={() => showSingleTOTP(account)}
+            >
+              TOTP
+            </Button>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleEditAccount(account.id)}
+            >
+              查看
+            </Button>
+            <Dropdown 
+              menu={{ items: getActionMenuItems(account) }}
+              trigger={['click']}
+            >
+              <Button size="small" icon={<MoreOutlined />}>
+                更多
+              </Button>
+            </Dropdown>
+          </Space>
+        </Space>
+      </Card>
+    );
+  };
+
   return (
     <div>
       <Title level={2}>
@@ -641,26 +769,30 @@ const GitHubAccountManagement: React.FC = () => {
               icon={<KeyOutlined />}
               onClick={showTOTPBatch}
               loading={totpLoading}
+              size={isMobile ? 'small' : 'middle'}
             >
-              批量查看TOTP
+              {isMobile ? 'TOTP' : '批量查看TOTP'}
             </Button>
             <Button
               icon={<ImportOutlined />}
               onClick={() => setBatchImportVisible(true)}
+              size={isMobile ? 'small' : 'middle'}
             >
-              批量导入
+              {isMobile ? '导入' : '批量导入'}
             </Button>
             <Button
               icon={<ExportOutlined />}
               onClick={handleExportAccounts}
               disabled={filteredAccounts.length === 0}
+              size={isMobile ? 'small' : 'middle'}
             >
-              导出账号
+              导出
             </Button>
             <Button
               icon={<ReloadOutlined />}
               onClick={loadAccounts}
               loading={loading}
+              size={isMobile ? 'small' : 'middle'}
             >
               刷新
             </Button>
@@ -668,8 +800,9 @@ const GitHubAccountManagement: React.FC = () => {
               type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddAccount}
+              size={isMobile ? 'small' : 'middle'}
             >
-              添加账号
+              {isMobile ? '添加' : '添加账号'}
             </Button>
           </Space>
         }
@@ -685,6 +818,7 @@ const GitHubAccountManagement: React.FC = () => {
                 style={{ width: '100%' }}
                 prefix={<SearchOutlined />}
                 allowClear
+                size={isMobile ? 'middle' : 'large'}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
@@ -694,6 +828,7 @@ const GitHubAccountManagement: React.FC = () => {
                 onChange={(value) => setSelectedGroupFilter(value)}
                 style={{ width: '100%' }}
                 allowClear
+                size={isMobile ? 'middle' : 'large'}
               >
                 <Option value={-1}>未分组</Option>
                 {groups.map(group => (
@@ -717,20 +852,23 @@ const GitHubAccountManagement: React.FC = () => {
                 ))}
               </Select>
             </Col>
-            <Col xs={24} sm={12} md={6}>
-              <RangePicker
-                placeholder={['开始日期', '结束日期']}
-                value={dateRange}
-                onChange={(dates) => setDateRange(dates)}
-                style={{ width: '100%' }}
-              />
-            </Col>
+            {!isMobile && (
+              <Col xs={24} sm={12} md={6}>
+                <RangePicker
+                  placeholder={['开始日期', '结束日期']}
+                  value={dateRange}
+                  onChange={(dates) => setDateRange(dates)}
+                  style={{ width: '100%' }}
+                />
+              </Col>
+            )}
             <Col xs={12} sm={6} md={3}>
               <Select
                 placeholder="排序方式"
                 value={sortOrder}
                 onChange={(value) => setSortOrder(value)}
                 style={{ width: '100%' }}
+                size={isMobile ? 'middle' : 'large'}
               >
                 <Option value="descend">创建时间↓</Option>
                 <Option value="ascend">创建时间↑</Option>
@@ -741,25 +879,48 @@ const GitHubAccountManagement: React.FC = () => {
                 icon={<FilterOutlined />}
                 onClick={handleResetFilters}
                 style={{ width: '100%' }}
+                size={isMobile ? 'middle' : 'large'}
               >
-                重置筛选
+                重置
               </Button>
             </Col>
           </Row>
         </div>
 
-        <Table
-          columns={columns}
-          dataSource={filteredAccounts}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
-          }}
-        />
+        {isMobile ? (
+          // 移动端：卡片列表视图
+          <div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <ReloadOutlined spin style={{ fontSize: '24px' }} />
+              </div>
+            ) : filteredAccounts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
+                <GithubOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
+                <div>暂无账号</div>
+                <div style={{ fontSize: '12px', marginTop: '8px' }}>
+                  点击右上角"添加"按钮创建账号
+                </div>
+              </div>
+            ) : (
+              filteredAccounts.map(account => renderMobileCard(account))
+            )}
+          </div>
+        ) : (
+          // PC端：表格视图
+          <Table
+            columns={columns}
+            dataSource={filteredAccounts}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
+            }}
+          />
+        )}
       </Card>
 
       <GitHubAccountForm

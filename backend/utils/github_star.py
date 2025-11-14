@@ -8,6 +8,12 @@ from typing import Tuple, Optional
 from urllib.parse import urlparse
 import asyncio
 
+# 配置常量
+CHECKUP_SKIP_TIMEOUT = 3  # 点击跳过按钮后等待时间（秒）
+CHECKUP_AUTO_REDIRECT_MAX_WAIT = 30  # 等待自动重定向的最大时间（秒）
+PAGE_LOAD_TIMEOUT = 30000  # 页面加载超时时间（毫秒）
+FALLBACK_WAIT_TIME = 5  # 未找到跳过按钮时的等待时间（秒）
+
 
 def parse_repository_url(repo_url: str) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -38,6 +44,90 @@ def parse_repository_url(repo_url: str) -> Tuple[Optional[str], Optional[str]]:
     except Exception as e:
         print(f"解析仓库URL失败: {e}")
         return None, None
+
+
+async def _handle_2fa_checkup(page, repo_url: Optional[str] = None) -> bool:
+    """
+    处理GitHub 2FA安全检查页面
+
+    Args:
+        page: Playwright page对象
+        repo_url: 可选的仓库URL,如果提供则在跳过后重新访问该URL
+
+    Returns:
+        True 如果成功处理或不在checkup页面, False 如果处理失败
+    """
+    try:
+        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    except ImportError:
+        PlaywrightTimeoutError = Exception
+
+    current_url = page.url
+
+    # 检查是否在2FA checkup页面
+    if 'two_factor_checkup' not in current_url and 'settings/security' not in current_url:
+        return True  # 不在checkup页面,无需处理
+
+    print("🔍 检测到GitHub 2FA安全检查页面,尝试跳过...")
+
+    # 跳过按钮选择器列表（移除了重复的大小写变体）
+    skip_selectors = [
+        'button:has-text("Skip")',
+        'a:has-text("Skip")',
+        'button:has-text("Skip for now")',
+        'a:has-text("Skip for now")',
+        'button:has-text("skip 2FA verification")',
+        'a:has-text("skip 2FA verification")',
+        '[data-ga-click*="skip"]',
+        '[href*="skip"]'
+    ]
+
+    skip_button_found = False
+    for selector in skip_selectors:
+        try:
+            skip_btn = await page.query_selector(selector)
+            if skip_btn and await skip_btn.is_visible():
+                print(f"✅ 找到跳过按钮: {selector}")
+                await skip_btn.click()
+                await asyncio.sleep(CHECKUP_SKIP_TIMEOUT)
+                skip_button_found = True
+
+                # 如果提供了repo_url,则重新访问仓库页面
+                if repo_url:
+                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                    await asyncio.sleep(2)
+                    print(f"🔗 跳过2FA检查后重新访问仓库: {repo_url}")
+                else:
+                    print(f"🔗 跳过2FA检查后URL: {page.url}")
+                break
+        except PlaywrightTimeoutError:
+            # 元素未找到,尝试下一个选择器
+            continue
+        except Exception as e:
+            print(f"⚠️ 尝试选择器 {selector} 失败: {e}")
+            continue
+
+    # 如果没有找到跳过按钮,等待自动重定向
+    if not skip_button_found:
+        print("⚠️ 未找到跳过按钮,尝试等待自动重定向...")
+
+        for i in range(CHECKUP_AUTO_REDIRECT_MAX_WAIT):
+            await asyncio.sleep(1)
+            current_url = page.url
+            if 'two_factor_checkup' not in current_url and 'settings/security' not in current_url:
+                print(f"✅ 2FA检查页面已自动离开: {current_url}")
+                return True
+            if i % 5 == 0 and i > 0:
+                print(f"⏳ 等待2FA检查页面自动重定向... ({i}/{CHECKUP_AUTO_REDIRECT_MAX_WAIT}秒)")
+
+        # 自动重定向超时,尝试重新访问仓库
+        if repo_url:
+            print("⚠️ 自动重定向超时,尝试重新访问仓库...")
+            await asyncio.sleep(FALLBACK_WAIT_TIME)
+            await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+            await asyncio.sleep(2)
+
+    return True
 
 
 async def star_github_repository(
@@ -81,9 +171,9 @@ async def star_github_repository(
             try:
                 # 1. 访问仓库页面
                 print(f"📂 访问仓库: {repo_url}")
-                await page.goto(repo_url, wait_until='domcontentloaded', timeout=30000)
+                await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
                 await asyncio.sleep(2)
-                
+
                 # 检查仓库是否存在
                 page_content = await page.content()
                 page_title = await page.title()
@@ -114,9 +204,12 @@ async def star_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=30000)
+                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
                     await asyncio.sleep(2)
-                
+
+                # 检查访问仓库后是否又被重定向到2FA checkup页面
+                await _handle_2fa_checkup(page, repo_url)
+
                 # 4. 查找Star按钮并检查状态
                 try:
                     # 等待页面加载完成
@@ -319,10 +412,15 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
 
         # 验证登录是否成功
         await asyncio.sleep(2)
+
+        # 处理 GitHub 的 2FA checkup 页面（安全检查）
+        await _handle_2fa_checkup(page)
+
+        # 更新当前URL
         current_url = page.url
 
         # 如果不再在登录页面，且不在2FA页面，则认为登录成功
-        if 'login' not in current_url and 'two-factor' not in current_url:
+        if 'login' not in current_url and 'two-factor' not in current_url and 'two_factor_checkup' not in current_url:
             return True, "GitHub登录成功"
         else:
             # 检查是否有错误提示
@@ -439,8 +537,11 @@ async def unstar_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=30000)
+                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
                     await asyncio.sleep(2)
+
+                # 检查访问仓库后是否又被重定向到2FA checkup页面
+                await _handle_2fa_checkup(page, repo_url)
 
                 # 4. 查找Star按钮并检查状态
                 try:

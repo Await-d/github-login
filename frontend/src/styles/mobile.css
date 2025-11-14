@@ -166,6 +166,37 @@
     width: 100% !important;
     margin-bottom: 8px !important;
   }
+
+  /* 仓库收藏页面移动端优化 */
+  .ant-card-head-wrapper {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+
+  .ant-card-extra {
+    width: 100% !important;
+    margin-top: 8px !important;
+    margin-left: 0 !important;
+  }
+
+  .ant-card-extra .ant-space {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  /* 确保移动端卡片内的Progress条正常显示 */
+  .ant-progress {
+    margin: 4px 0 !important;
+  }
+
+  /* 移动端任务卡片样式 */
+  .mobile-task-card {
+    margin-bottom: 12px !important;
+  }
+
+  .mobile-task-card .ant-card-body {
+    padding: 12px !important;
+  }
 }
 
 /* 超小屏幕优化（手机竖屏） */
