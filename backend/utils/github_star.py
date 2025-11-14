@@ -26,17 +26,41 @@ def parse_repository_url(repo_url: str) -> Tuple[Optional[str], Optional[str]]:
         (owner, repo_name) 或 (None, None) 如果解析失败
     """
     try:
+        # 安全检查:只接受GitHub URL
+        if not repo_url or not isinstance(repo_url, str):
+            return None, None
+            
+        # 去除首尾空格
+        repo_url = repo_url.strip()
+        
+        # 必须是https://github.com开头(安全考虑,不接受http)
+        if not repo_url.startswith('https://github.com/'):
+            # 尝试自动添加https://
+            if repo_url.startswith('github.com/'):
+                repo_url = 'https://' + repo_url
+            else:
+                return None, None
+        
         # 移除末尾的斜杠和.git后缀
         repo_url = repo_url.rstrip('/').replace('.git', '')
         
-        # 使用正则表达式匹配GitHub仓库URL
-        # 支持格式: https://github.com/owner/repo 或 github.com/owner/repo
-        pattern = r'github\.com/([^/]+)/([^/]+)'
-        match = re.search(pattern, repo_url)
+        # 使用严格的正则表达式匹配
+        # owner和repo_name只允许字母、数字、连字符、下划线和点
+        pattern = r'^https://github\.com/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_.-]+)$'
+        match = re.match(pattern, repo_url)
         
         if match:
             owner = match.group(1)
             repo_name = match.group(2)
+            
+            # GitHub限制: owner最长39字符,repo最长100字符
+            if len(owner) > 39 or len(repo_name) > 100:
+                return None, None
+            
+            # 不允许特殊字符开头
+            if owner.startswith(('-', '_')) or repo_name.startswith(('-', '_', '.')):
+                return None, None
+                
             return owner, repo_name
         else:
             return None, None

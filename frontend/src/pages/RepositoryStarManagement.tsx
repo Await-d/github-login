@@ -524,7 +524,9 @@ const RepositoryStarManagement: React.FC = () => {
             <GithubOutlined /> {record.owner}/{record.repo_name}
           </a>
           {record.description && (
-            <span style={{ fontSize: '12px', color: '#888' }}>{record.description}</span>
+            <span style={{ fontSize: '12px', color: '#888' }}>
+              {String(record.description).substring(0, 200)}
+            </span>
           )}
         </Space>
       )
@@ -663,7 +665,7 @@ const RepositoryStarManagement: React.FC = () => {
       title: '错误信息',
       dataIndex: 'error_message',
       key: 'error_message',
-      render: (text: string | null) => text || '-'
+      render: (text: string | null) => text ? String(text).substring(0, 500) : '-'
     },
     {
       title: '执行时间',
@@ -756,7 +758,7 @@ const RepositoryStarManagement: React.FC = () => {
           
           {task.description && (
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              {task.description}
+              {String(task.description).substring(0, 200)}
             </Text>
           )}
 
@@ -1088,7 +1090,12 @@ const RepositoryStarManagement: React.FC = () => {
             name="description"
             label="描述/备注"
           >
-            <TextArea rows={3} placeholder="可选，描述这个仓库收藏任务" />
+            <TextArea 
+              rows={3} 
+              maxLength={500}
+              showCount
+              placeholder="可选，描述这个仓库收藏任务(最多500字)" 
+            />
           </Form.Item>
           
           <Form.Item
@@ -1177,7 +1184,9 @@ const RepositoryStarManagement: React.FC = () => {
           >
             <TextArea
               rows={10}
-              placeholder="每行一个GitHub仓库URL，例如：&#10;https://github.com/facebook/react&#10;https://github.com/vuejs/vue&#10;https://github.com/angular/angular"
+              maxLength={10000}
+              showCount
+              placeholder="每行一个GitHub仓库URL，例如：&#10;https://github.com/facebook/react&#10;https://github.com/vuejs/vue&#10;https://github.com/angular/angular&#10;(最多100个仓库)"
             />
           </Form.Item>
           
@@ -1276,7 +1285,12 @@ const RepositoryStarManagement: React.FC = () => {
             name="description"
             label="描述/备注"
           >
-            <TextArea rows={3} placeholder="可选：添加任务描述或备注信息" />
+            <TextArea 
+              rows={3}
+              maxLength={500}
+              showCount
+              placeholder="可选：添加任务描述或备注信息(最多500字)" 
+            />
           </Form.Item>
         </Form>
       </Modal>

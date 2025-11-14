@@ -108,7 +108,10 @@ async def _queue_executor(
                         break
                         
                 except Exception as e:
-                    message = str(e)
+                    # 不直接暴露异��详情,避免泄露敏感信息
+                    import logging
+                    logging.error(f"账号 {account.username} 执行异常: {type(e).__name__}", exc_info=True)
+                    message = f"执行失败: {type(e).__name__}"
                     if retry_count < MAX_RETRY:
                         retry_count += 1
                         print(f"❌ 账号 {account.username} 执行异常: {e}，{RETRY_DELAY}秒后进行第{retry_count}次重试...")
@@ -118,44 +121,44 @@ async def _queue_executor(
                         break
             
             # 重试循环结束后，判断最终状态
-                if success:
-                    if "已收藏" in message:
-                        record_status = "already_starred"
-                        already_starred_count += 1
-                    else:
-                        record_status = "success"
-                        success_count += 1
+            if success:
+                if "已收藏" in message:
+                    record_status = "already_starred"
+                    already_starred_count += 1
                 else:
-                    record_status = "failed"
-                    failed_count += 1
+                    record_status = "success"
+                    success_count += 1
+            else:
+                record_status = "failed"
+                failed_count += 1
 
-                # 创建或更新执行记录
-                existing_record = db.query(RepositoryStarRecord).filter(
-                    RepositoryStarRecord.task_id == task_id,
-                    RepositoryStarRecord.github_account_id == account_id
-                ).first()
+            # 创建或更新执行记录
+            existing_record = db.query(RepositoryStarRecord).filter(
+                RepositoryStarRecord.task_id == task_id,
+                RepositoryStarRecord.github_account_id == account_id
+            ).first()
 
-                if existing_record:
-                    # 更新记录
-                    existing_record.status = record_status
-                    existing_record.error_message = None if success else message
-                    existing_record.executed_at = func.now()
-                else:
-                    # 创建新记录
-                    record = RepositoryStarRecord(
-                        task_id=task_id,
-                        github_account_id=account_id,
-                        status=record_status,
-                        error_message=None if success else message
-                    )
-                    db.add(record)
+            if existing_record:
+                # 更新记录
+                existing_record.status = record_status
+                existing_record.error_message = None if success else message
+                existing_record.executed_at = func.now()
+            else:
+                # 创建新记录
+                record = RepositoryStarRecord(
+                    task_id=task_id,
+                    github_account_id=account_id,
+                    status=record_status,
+                    error_message=None if success else message
+                )
+                db.add(record)
 
-                details.append({
-                    "account_id": account_id,
-                    "username": account.username,
-                    "status": record_status,
-                    "message": message
-                })
+            details.append({
+                "account_id": account_id,
+                "username": account.username,
+                "status": record_status,
+                "message": message
+            })
 
         db.commit()
 
@@ -520,6 +523,13 @@ async def batch_import_repository_star_tasks(
     db: Session = Depends(get_db)
 ):
     """批量导入仓库收藏任务"""
+    
+    # 限制批量导入数量,防止滥用
+    if len(import_data.repository_urls) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="一次最多导入100个仓库"
+        )
     
     created_tasks = []
     
