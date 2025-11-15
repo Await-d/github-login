@@ -4,15 +4,20 @@ GitHub仓库Star操作工具
 """
 
 import re
+import logging
 from typing import Tuple, Optional
 from urllib.parse import urlparse
 import asyncio
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 # 配置常量
 CHECKUP_SKIP_TIMEOUT = 3  # 点击跳过按钮后等待时间（秒）
 CHECKUP_AUTO_REDIRECT_MAX_WAIT = 30  # 等待自动重定向的最大时间（秒）
 PAGE_LOAD_TIMEOUT = 30000  # 页面加载超时时间（毫秒）
 FALLBACK_WAIT_TIME = 5  # 未找到跳过按钮时的等待时间（秒）
+MAX_DEBUG_INPUTS = 10  # 调试时打印的最大输入框数量
 
 
 def parse_repository_url(repo_url: str) -> Tuple[Optional[str], Optional[str]]:
@@ -183,6 +188,33 @@ async def star_github_repository(
         except ImportError:
             return False, "系统缺少playwright依赖，无法执行GitHub Star操作"
 
+        async def _navigate_with_error_handling(page, url: str, context: str = "访问页面") -> Tuple[bool, Optional[str]]:
+            """
+            导航到指定URL，统一处理网络错误
+
+            Args:
+                page: Playwright page对象
+                url: 目标URL
+                context: 操作上下文描述，用于错误消息
+
+            Returns:
+                (success, error_message) - 成功时返回(True, None)，失败时返回(False, 错误消息)
+            """
+            try:
+                await page.goto(url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                await asyncio.sleep(2)
+                return True, None
+            except PlaywrightTimeoutError:
+                return False, f"{context}超时: 网络连接问题或页面加载过慢"
+            except Exception as nav_error:
+                error_msg = str(nav_error)
+                if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                    return False, f"{context}时网络连接错误: {error_msg}"
+                elif 'timeout' in error_msg.lower():
+                    return False, f"{context}时网络超时: {error_msg}"
+                else:
+                    return False, f"{context}失败: {error_msg}"
+
         # 仓库URL
         repo_url = f"https://github.com/{repo_owner}/{repo_name}"
 
@@ -197,19 +229,9 @@ async def star_github_repository(
             try:
                 # 1. 访问仓库页面
                 print(f"📂 访问仓库: {repo_url}")
-                try:
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                    await asyncio.sleep(2)
-                except PlaywrightTimeoutError:
-                    return False, f"访问仓库超时: 网络连接问题或页面加载过慢"
-                except Exception as nav_error:
-                    error_msg = str(nav_error)
-                    if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
-                        return False, f"网络连接错误: {error_msg}"
-                    elif 'timeout' in error_msg.lower():
-                        return False, f"网络超时: {error_msg}"
-                    else:
-                        return False, f"访问仓库失败: {error_msg}"
+                success, error = await _navigate_with_error_handling(page, repo_url, "访问仓库")
+                if not success:
+                    return False, error
 
                 # 检查仓库是否存在
                 page_content = await page.content()
@@ -241,17 +263,9 @@ async def star_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    try:
-                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                        await asyncio.sleep(2)
-                    except PlaywrightTimeoutError:
-                        return False, f"登录后访问仓库超时: 网络连接问题"
-                    except Exception as nav_error:
-                        error_msg = str(nav_error)
-                        if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
-                            return False, f"登录后网络连接错误: {error_msg}"
-                        else:
-                            return False, f"登录后访问仓库失败: {error_msg}"
+                    success, error = await _navigate_with_error_handling(page, repo_url, "登录后访问仓库")
+                    if not success:
+                        return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
                 await _handle_2fa_checkup(page, repo_url)
@@ -510,14 +524,14 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
                 "input[inputmode='numeric'][maxlength='6']"
             ]
 
-            print("🔍 搜索TOTP输入框...")
+            logger.debug("🔍 搜索TOTP输入框...")
             totp_input = None
             for selector in totp_selectors:
                 try:
                     input_elem = await page.query_selector(selector)
                     if input_elem and await input_elem.is_visible() and await input_elem.is_enabled():
                         totp_input = input_elem
-                        print(f"✅ 找到TOTP输入框，使用选择器: {selector}")
+                        logger.debug(f"✅ 找到TOTP输入框，使用选择器: {selector}")
                         break
                 except Exception:
                     continue
@@ -526,15 +540,15 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
                 # 调试：打印页面中的所有输入框
                 try:
                     all_inputs = await page.query_selector_all('input')
-                    print(f"📋 页面中发现 {len(all_inputs)} 个输入框")
-                    for i, input_elem in enumerate(all_inputs[:10]):
+                    logger.debug(f"📋 页面中发现 {len(all_inputs)} 个输入框")
+                    for i, input_elem in enumerate(all_inputs[:MAX_DEBUG_INPUTS]):
                         try:
                             input_type = await input_elem.get_attribute("type") or "text"
                             input_name = await input_elem.get_attribute("name") or ""
                             input_id = await input_elem.get_attribute("id") or ""
                             is_visible = await input_elem.is_visible()
                             is_enabled = await input_elem.is_enabled()
-                            print(f"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}, visible={is_visible}, enabled={is_enabled}")
+                            logger.debug(f"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}, visible={is_visible}, enabled={is_enabled}")
                         except Exception:
                             continue
                 except Exception:
@@ -637,6 +651,33 @@ async def unstar_github_repository(
         except ImportError:
             return False, "系统缺少playwright依赖，无法执行GitHub Unstar操作"
 
+        async def _navigate_with_error_handling(page, url: str, context: str = "访问页面") -> Tuple[bool, Optional[str]]:
+            """
+            导航到指定URL，统一处理网络错误
+
+            Args:
+                page: Playwright page对象
+                url: 目标URL
+                context: 操作上下文描述，用于错误消息
+
+            Returns:
+                (success, error_message) - 成功时返回(True, None)，失败时返回(False, 错误消息)
+            """
+            try:
+                await page.goto(url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                await asyncio.sleep(2)
+                return True, None
+            except PlaywrightTimeoutError:
+                return False, f"{context}超时: 网络连接问题或页面加载过慢"
+            except Exception as nav_error:
+                error_msg = str(nav_error)
+                if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                    return False, f"{context}时网络连接错误: {error_msg}"
+                elif 'timeout' in error_msg.lower():
+                    return False, f"{context}时网络超时: {error_msg}"
+                else:
+                    return False, f"{context}失败: {error_msg}"
+
         # 仓库URL
         repo_url = f"https://github.com/{repo_owner}/{repo_name}"
 
@@ -651,8 +692,9 @@ async def unstar_github_repository(
             try:
                 # 1. 访问仓库页面
                 print(f"📂 访问仓库: {repo_url}")
-                await page.goto(repo_url, wait_until='domcontentloaded', timeout=30000)
-                await asyncio.sleep(2)
+                success, error = await _navigate_with_error_handling(page, repo_url, "访问仓库")
+                if not success:
+                    return False, error
 
                 # 检查仓库是否存在
                 page_content = await page.content()
@@ -684,17 +726,9 @@ async def unstar_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    try:
-                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                        await asyncio.sleep(2)
-                    except PlaywrightTimeoutError:
-                        return False, f"登录后访问仓库超时: 网络连接问题"
-                    except Exception as nav_error:
-                        error_msg = str(nav_error)
-                        if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
-                            return False, f"登录后网络连接错误: {error_msg}"
-                        else:
-                            return False, f"登录后访问仓库失败: {error_msg}"
+                    success, error = await _navigate_with_error_handling(page, repo_url, "登录后访问仓库")
+                    if not success:
+                        return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
                 await _handle_2fa_checkup(page, repo_url)

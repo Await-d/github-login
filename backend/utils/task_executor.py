@@ -165,11 +165,26 @@ async def execute_github_oauth_task(
         
         if not github_accounts:
             return False, "未找到有效的GitHub账号", {}
-        
+
         results = []
         success_count = 0
         total_count = len(github_accounts)
-        
+
+        # 批量查询所有账号的上一次余额记录（优化性能，避免N+1查询）
+        account_ids = [acc.id for acc in github_accounts]
+        previous_snapshots_query = db_session.query(AccountBalanceSnapshot).filter(
+            AccountBalanceSnapshot.account_id.in_(account_ids)
+        ).order_by(
+            AccountBalanceSnapshot.account_id,
+            AccountBalanceSnapshot.snapshot_time.desc()
+        ).all()
+
+        # 为每个账号保留最新的快照（已按时间倒序排序）
+        previous_snapshot_map = {}
+        for snapshot in previous_snapshots_query:
+            if snapshot.account_id not in previous_snapshot_map:
+                previous_snapshot_map[snapshot.account_id] = snapshot
+
         # 记录任务开始
         task_logger.log_task_start(task.id, task.name, total_count)
         
@@ -250,7 +265,8 @@ async def execute_github_oauth_task(
                     task,
                     execution_log,
                     account,
-                    account_result
+                    account_result,
+                    previous_snapshot_map.get(account.id)  # 从预加载的map中获取
                 )
 
             except Exception as e:
@@ -292,7 +308,8 @@ async def execute_github_oauth_task(
                     task,
                     execution_log,
                     account,
-                    account_result
+                    account_result,
+                    previous_snapshot_map.get(account.id)  # 从预加载的map中获取
                 )
         
         # 记录任务完成
@@ -661,18 +678,21 @@ def _record_account_balance_snapshot(
     task: ScheduledTask,
     execution_log: Optional[TaskExecutionLog],
     account: GitHubAccount,
-    account_result: Dict[str, Any]
+    account_result: Dict[str, Any],
+    previous_snapshot: Optional[AccountBalanceSnapshot] = None
 ) -> None:
-    """将账户余额信息持久化为快照"""
+    """将账户余额信息持久化为快照
+
+    Args:
+        db_session: 数据库会话
+        task: 任务对象
+        execution_log: 执行日志（可选）
+        account: GitHub账号
+        account_result: 账号执行结果
+        previous_snapshot: 上一次余额快照（可选，用于避免重复查询）
+    """
     balance_value = account_result.get("balance")
     parsed_balance = _parse_balance_value(balance_value)
-
-    # 查询该账号的上一次余额记录
-    previous_snapshot = db_session.query(AccountBalanceSnapshot)\
-        .filter(AccountBalanceSnapshot.account_id == account.id)\
-        .order_by(AccountBalanceSnapshot.snapshot_time.desc())\
-        .limit(1)\
-        .first()
 
     # 格式化上一次余额为字符串
     previous_balance_text = None
