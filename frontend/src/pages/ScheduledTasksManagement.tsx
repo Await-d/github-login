@@ -119,6 +119,10 @@ const ScheduledTasksManagement: React.FC = () => {
   const [createSelectAll, setCreateSelectAll] = useState(false);
   const [editSelectAll, setEditSelectAll] = useState(false);
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   useEffect(() => {
     loadTasks();
     loadGitHubAccounts();
@@ -614,16 +618,39 @@ const ScheduledTasksManagement: React.FC = () => {
       }
     },
     {
-      title: '原始数据',
+      title: '上次余额',
       dataIndex: 'raw_text',
       key: 'raw_text',
-      render: (text: string | null) => (text ? (
-        <Tooltip title={text}>
-          <Text ellipsis style={{ maxWidth: 220, display: 'inline-block' }}>
-            {text.length > 20 ? `${text.substring(0, 20)}...` : text}
-          </Text>
-        </Tooltip>
-      ) : '-')
+      render: (text: string | null) => text || '-'
+    },
+    {
+      title: '余额变化',
+      key: 'balance_change',
+      render: (_: any, record: BalanceSnapshot) => {
+        if (record.balance === null || record.balance === undefined || !record.raw_text) {
+          return '-';
+        }
+
+        // 从上次余额文本中提取数值（格式如 "100.00 USD" 或 "-50.50 EUR"）
+        // 更严格的正则表达式，支持负数和小数
+        const match = record.raw_text.match(/^(-?\d+(?:\.\d+)?)/);
+        if (!match) return '-';
+
+        const previousBalance = parseFloat(match[1]);
+        const change = record.balance - previousBalance;
+
+        // 使用更小的阈值判断变化
+        if (Math.abs(change) < 0.01) {
+          return <Text type="secondary">无变化</Text>;
+        }
+
+        const currency = record.currency || '';
+        const changeText = `${change > 0 ? '+' : ''}${change.toFixed(2)}${currency ? ` ${currency}` : ''}`;
+
+        return change > 0
+          ? <Text type="success">↑ {changeText}</Text>
+          : <Text type="danger">↓ {changeText}</Text>;
+      }
     },
     {
       title: '错误信息',
@@ -730,10 +757,19 @@ const ScheduledTasksManagement: React.FC = () => {
           loading={loading}
           scroll={{ x: 'max-content' }}
           pagination={{
-            pageSize: 10,
+            current: currentPage,
+            pageSize: pageSize,
+            total: tasks.length,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`
+            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`,
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              if (size !== pageSize) {
+                setPageSize(size);
+                setCurrentPage(1); // 改变页大小时重置到第一页
+              }
+            }
           }}
         />
       </Card>

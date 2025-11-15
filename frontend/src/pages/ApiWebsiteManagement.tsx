@@ -66,6 +66,10 @@ const ApiWebsiteManagement: React.FC = () => {
   const [currentAccountInfo, setCurrentAccountInfo] = useState<AccountInfo | null>(null);
   const [accountInfoLoading, setAccountInfoLoading] = useState(false);
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   useEffect(() => {
     loadWebsites();
   }, []);
@@ -386,10 +390,19 @@ const ApiWebsiteManagement: React.FC = () => {
           loading={loading}
           scroll={{ x: 'max-content' }}
           pagination={{
-            pageSize: 10,
+            current: currentPage,
+            pageSize: pageSize,
+            total: websites.length,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个网站`
+            showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个网站`,
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              if (size !== pageSize) {
+                setPageSize(size);
+                setCurrentPage(1); // 改变页大小时重置到第一页
+              }
+            }
           }}
         />
       </Card>

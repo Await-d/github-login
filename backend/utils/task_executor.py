@@ -513,15 +513,23 @@ def determine_error_type(error_message: str) -> str:
     根据错误消息确定错误类型
     """
     error_msg = error_message.lower()
-    
+
+    # 定义错误关键词列表，提高可读性
     if "2fa" in error_msg or "两个因子" in error_msg or "验证码" in error_msg:
         return "2fa_failed"
     elif "登录" in error_msg or "login" in error_msg:
         return "login_failed"
-    elif "网络" in error_msg or "network" in error_msg or "timeout" in error_msg:
+
+    # 网络相关错误关键词
+    network_keywords = ["网络", "network", "timeout", "超时", "connection", "err_connection"]
+    if any(keyword in error_msg for keyword in network_keywords):
         return "network_error"
-    elif "未找到" in error_msg or "not found" in error_msg:
+
+    # UI元素缺失关键词
+    missing_keywords = ["未找到", "not found", "找不到"]
+    if any(keyword in error_msg for keyword in missing_keywords):
         return "ui_element_missing"
+
     elif "webdriver" in error_msg or "browser" in error_msg:
         return "browser_error"
     else:
@@ -539,6 +547,7 @@ def should_retry_oauth_error(error_message: str) -> bool:
         "未找到GitHub用户名输入框",
         "未找到GitHub密码输入框",
         "未找到2FA验证码输入框",
+        "找不到TOTP输入框",  # TOTP验证码输入框
         "未找到GitHub OAuth登录选项"
     ]
     
@@ -554,6 +563,8 @@ def should_retry_oauth_error(error_message: str) -> bool:
         "超时",
         "timeout",
         "connection",
+        "ERR_CONNECTION_CLOSED",  # 网络连接关闭
+        "net::ERR",  # Chrome网络错误
         "webdriver",
         "异常",
         "OAuth窗口未打开",
@@ -655,6 +666,20 @@ def _record_account_balance_snapshot(
     """将账户余额信息持久化为快照"""
     balance_value = account_result.get("balance")
     parsed_balance = _parse_balance_value(balance_value)
+
+    # 查询该账号的上一次余额记录
+    previous_snapshot = db_session.query(AccountBalanceSnapshot)\
+        .filter(AccountBalanceSnapshot.account_id == account.id)\
+        .order_by(AccountBalanceSnapshot.snapshot_time.desc())\
+        .limit(1)\
+        .first()
+
+    # 格式化上一次余额为字符串
+    previous_balance_text = None
+    if previous_snapshot and previous_snapshot.balance is not None:
+        currency = previous_snapshot.currency or ''
+        previous_balance_text = f"{previous_snapshot.balance:.2f}{' ' + currency if currency else ''}"
+
     snapshot = AccountBalanceSnapshot(
         task_id=task.id,
         execution_log_id=execution_log.id if execution_log else None,
@@ -662,7 +687,7 @@ def _record_account_balance_snapshot(
         snapshot_time=datetime.now(timezone.utc),
         balance=parsed_balance,
         currency=account_result.get("balance_currency"),
-        raw_text=account_result.get("balance_raw_text") or account_result.get("message"),
+        raw_text=previous_balance_text,  # 保存上一次的余额记录
         extraction_error=account_result.get("balance_extraction_error") or account_result.get("error")
     )
     db_session.add(snapshot)

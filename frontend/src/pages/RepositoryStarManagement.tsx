@@ -127,6 +127,10 @@ const RepositoryStarManagement: React.FC = () => {
   const [addTaskSelectAll, setAddTaskSelectAll] = useState(false);
   const [batchImportSelectAll, setBatchImportSelectAll] = useState(false);
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   useEffect(() => {
     loadTasks();
     loadGitHubAccounts();
@@ -1057,10 +1061,19 @@ const RepositoryStarManagement: React.FC = () => {
               ],
             }}
             pagination={{
-              pageSize: 10,
+              current: currentPage,
+              pageSize: pageSize,
+              total: tasks.length,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`,
+              onChange: (page, size) => {
+                setCurrentPage(page);
+                if (size !== pageSize) {
+                  setPageSize(size);
+                  setCurrentPage(1); // 改变页大小时重置到第一页
+                }
+              }
             }}
           />
         )}

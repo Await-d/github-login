@@ -46,6 +46,10 @@ const GitHubGroupsManagement: React.FC = () => {
   const [form] = Form.useForm();
   const [selectedColor, setSelectedColor] = useState<string>('#1890ff');
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   useEffect(() => {
     loadGroups();
   }, []);
@@ -224,10 +228,19 @@ const GitHubGroupsManagement: React.FC = () => {
           loading={loading}
           scroll={{ x: 'max-content' }}
           pagination={{
-            pageSize: 10,
+            current: currentPage,
+            pageSize: pageSize,
+            total: groups.length,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个分组`,
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              if (size !== pageSize) {
+                setPageSize(size);
+                setCurrentPage(1); // 改变页大小时重置到第一页
+              }
+            }
           }}
         />
       </Card>

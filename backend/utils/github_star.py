@@ -197,8 +197,19 @@ async def star_github_repository(
             try:
                 # 1. 访问仓库页面
                 print(f"📂 访问仓库: {repo_url}")
-                await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                await asyncio.sleep(2)
+                try:
+                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                    await asyncio.sleep(2)
+                except PlaywrightTimeoutError:
+                    return False, f"访问仓库超时: 网络连接问题或页面加载过慢"
+                except Exception as nav_error:
+                    error_msg = str(nav_error)
+                    if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                        return False, f"网络连接错误: {error_msg}"
+                    elif 'timeout' in error_msg.lower():
+                        return False, f"网络超时: {error_msg}"
+                    else:
+                        return False, f"访问仓库失败: {error_msg}"
 
                 # 检查仓库是否存在
                 page_content = await page.content()
@@ -230,8 +241,17 @@ async def star_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                    await asyncio.sleep(2)
+                    try:
+                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                        await asyncio.sleep(2)
+                    except PlaywrightTimeoutError:
+                        return False, f"登录后访问仓库超时: 网络连接问题"
+                    except Exception as nav_error:
+                        error_msg = str(nav_error)
+                        if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                            return False, f"登录后网络连接错误: {error_msg}"
+                        else:
+                            return False, f"登录后访问仓库失败: {error_msg}"
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
                 await _handle_2fa_checkup(page, repo_url)
@@ -381,17 +401,35 @@ async def star_github_repository(
                                 print(f"⚠️ 未找到Starred按钮，但操作可能已成功: {str(wait_error)}")
                                 return True, f"收藏操作已执行: {repo_owner}/{repo_name}"
                         except Exception as click_error:
-                            print(f"❌ 点击Star按钮失败: {str(click_error)}")
-                            return False, f"点击Star按钮失败: {str(click_error)}"
+                            error_msg = str(click_error)
+                            print(f"❌ 点击Star按钮失败: {error_msg}")
+
+                            # 区分网络错误和其他错误
+                            if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                                return False, f"网络连接错误: {error_msg}"
+                            elif 'timeout' in error_msg.lower():
+                                return False, f"操作超时: {error_msg}"
+                            else:
+                                return False, f"点击Star按钮失败: {error_msg}"
 
                 except Exception as e:
                     return False, f"Star操作失败: {str(e)}"
 
             finally:
                 await browser.close()
-                
+
     except Exception as e:
-        return False, f"GitHub Star操作异常: {str(e)}"
+        error_msg = str(e)
+
+        # 区分不同类型的错误
+        if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+            return False, f"网络连接错误: {error_msg}"
+        elif 'timeout' in error_msg.lower() or 'TimeoutError' in error_msg:
+            return False, f"网络超时: {error_msg}"
+        elif 'playwright' in error_msg.lower() and 'ImportError' not in error_msg:
+            return False, f"浏览器自动化错误: {error_msg}"
+        else:
+            return False, f"GitHub Star操作异常: {error_msg}"
 
 
 async def _login_to_github(page, username: str, password: str, totp_secret: str) -> Tuple[bool, str]:
@@ -447,14 +485,60 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
             totp_code = totp_info['token']
 
             # 填写TOTP验证码
-            # 使用正确的选择器顺序，与定时任务登录保持一致
-            totp_input = await page.query_selector('input[name="app_otp"]')
-            if not totp_input:
-                totp_input = await page.query_selector('input#app_totp')
-            if not totp_input:
-                totp_input = await page.query_selector('input[name="app_totp"]')
+            # 使用全面的选择器列表，提高兼容性
+            totp_selectors = [
+                "input[name='app_otp']",  # GitHub TOTP应用 (优先)
+                "input[id='app_totp']",   # GitHub TOTP应用ID
+                "input[name='app_totp']", # GitHub TOTP应用名称
+                "input[name='otp']",      # 通用OTP
+                "input[autocomplete='one-time-code']",  # HTML5标准
+                "input[type='text'][autocomplete*='code']",
+                "input[id='otp']",
+                "input[class*='otp']",
+                "input[class*='two-factor']",
+                "input[class*='2fa']",
+                "input[placeholder*='code']",
+                "input[placeholder*='verification']",
+                "input[type='text'][maxlength='6']",
+                "input[type='text'][pattern*='[0-9]']",
+                "input[data-testid*='otp']",
+                "input[aria-label*='code']",
+                "input[aria-label*='verification']",
+                "input[name='sms_otp']",  # GitHub SMS选项
+                "input[class*='form-control'][maxlength='6']",
+                "input[type='tel'][maxlength='6']",
+                "input[inputmode='numeric'][maxlength='6']"
+            ]
+
+            print("🔍 搜索TOTP输入框...")
+            totp_input = None
+            for selector in totp_selectors:
+                try:
+                    input_elem = await page.query_selector(selector)
+                    if input_elem and await input_elem.is_visible() and await input_elem.is_enabled():
+                        totp_input = input_elem
+                        print(f"✅ 找到TOTP输入框，使用选择器: {selector}")
+                        break
+                except Exception:
+                    continue
 
             if not totp_input:
+                # 调试：打印页面中的所有输入框
+                try:
+                    all_inputs = await page.query_selector_all('input')
+                    print(f"📋 页面中发现 {len(all_inputs)} 个输入框")
+                    for i, input_elem in enumerate(all_inputs[:10]):
+                        try:
+                            input_type = await input_elem.get_attribute("type") or "text"
+                            input_name = await input_elem.get_attribute("name") or ""
+                            input_id = await input_elem.get_attribute("id") or ""
+                            is_visible = await input_elem.is_visible()
+                            is_enabled = await input_elem.is_enabled()
+                            print(f"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}, visible={is_visible}, enabled={is_enabled}")
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
                 return False, "找不到TOTP输入框"
 
             await totp_input.fill(totp_code)
@@ -600,8 +684,17 @@ async def unstar_github_repository(
                     print("✅ GitHub登录成功")
 
                     # 登录后重新访问仓库页面
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                    await asyncio.sleep(2)
+                    try:
+                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                        await asyncio.sleep(2)
+                    except PlaywrightTimeoutError:
+                        return False, f"登录后访问仓库超时: 网络连接问题"
+                    except Exception as nav_error:
+                        error_msg = str(nav_error)
+                        if 'ERR_CONNECTION_CLOSED' in error_msg or 'net::ERR' in error_msg:
+                            return False, f"登录后网络连接错误: {error_msg}"
+                        else:
+                            return False, f"登录后访问仓库失败: {error_msg}"
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
                 await _handle_2fa_checkup(page, repo_url)

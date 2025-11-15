@@ -99,6 +99,10 @@ const GitHubAccountManagement: React.FC = () => {
   const [groups, setGroups] = useState<GitHubGroup[]>([]);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<number | null>(null);
 
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   useEffect(() => {
     loadAccounts();
     loadGroups();
@@ -240,6 +244,8 @@ const GitHubAccountManagement: React.FC = () => {
     }
 
     setFilteredAccounts(filtered);
+    // 筛选条件变化时重置到第一页
+    setCurrentPage(1);
   }, [accounts, searchText, dateRange, sortOrder, selectedGroupFilter]);
 
   const handleResetFilters = () => {
@@ -915,10 +921,19 @@ const GitHubAccountManagement: React.FC = () => {
             loading={loading}
             scroll={{ x: 'max-content' }}
             pagination={{
-              pageSize: 10,
+              current: currentPage,
+              pageSize: pageSize,
+              total: filteredAccounts.length,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个账号`,
+              onChange: (page, size) => {
+                setCurrentPage(page);
+                if (size !== pageSize) {
+                  setPageSize(size);
+                  setCurrentPage(1); // 改变页大小时重置到第一页
+                }
+              }
             }}
           />
         )}
