@@ -396,9 +396,9 @@ const ApiWebsiteManagement: React.FC = () => {
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个网站`,
-            onChange: (page, size) => {
+            onChange: (page: number, size?: number) => {
               setCurrentPage(page);
-              if (size !== pageSize) {
+              if (size !== undefined && size !== pageSize) {
                 setPageSize(size);
                 setCurrentPage(1); // 改变页大小时重置到第一页
               }

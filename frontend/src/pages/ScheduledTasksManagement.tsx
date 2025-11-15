@@ -631,25 +631,42 @@ const ScheduledTasksManagement: React.FC = () => {
           return '-';
         }
 
-        // 从上次余额文本中提取数值（格式如 "100.00 USD" 或 "-50.50 EUR"）
-        // 更严格的正则表达式，支持负数和小数
-        const match = record.raw_text.match(/^(-?\d+(?:\.\d+)?)/);
-        if (!match) return '-';
+        try {
+          // 从上次余额文本中提取数值
+          // 支持多种格式：
+          // - "100.00 USD"
+          // - "-50.50 EUR"
+          // - "Balance: 100.00"
+          // - "USD 100.00"
+          // 使用更宽松的正则，查找第一个数字
+          const match = record.raw_text.match(/(-?\d+(?:\.\d+)?)/);
+          if (!match) return '-';
 
-        const previousBalance = parseFloat(match[1]);
-        const change = record.balance - previousBalance;
+          const previousBalance = parseFloat(match[1]);
 
-        // 使用更小的阈值判断变化
-        if (Math.abs(change) < 0.01) {
-          return <Text type="secondary">无变化</Text>;
+          // 检查解析结果是否有效
+          if (isNaN(previousBalance)) {
+            return '-';
+          }
+
+          const change = record.balance - previousBalance;
+
+          // 使用更小的阈值判断变化
+          if (Math.abs(change) < 0.01) {
+            return <Text type="secondary">无变化</Text>;
+          }
+
+          const currency = record.currency || '';
+          const changeText = `${change > 0 ? '+' : ''}${change.toFixed(2)}${currency ? ` ${currency}` : ''}`;
+
+          return change > 0
+            ? <Text type="success">↑ {changeText}</Text>
+            : <Text type="danger">↓ {changeText}</Text>;
+        } catch (error) {
+          // 容错处理：计算失败时返回'-'
+          console.warn('余额变化计算失败:', error);
+          return '-';
         }
-
-        const currency = record.currency || '';
-        const changeText = `${change > 0 ? '+' : ''}${change.toFixed(2)}${currency ? ` ${currency}` : ''}`;
-
-        return change > 0
-          ? <Text type="success">↑ {changeText}</Text>
-          : <Text type="danger">↓ {changeText}</Text>;
       }
     },
     {
@@ -763,9 +780,9 @@ const ScheduledTasksManagement: React.FC = () => {
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`,
-            onChange: (page, size) => {
+            onChange: (page: number, size?: number) => {
               setCurrentPage(page);
-              if (size !== pageSize) {
+              if (size !== undefined && size !== pageSize) {
                 setPageSize(size);
                 setCurrentPage(1); // 改变页大小时重置到第一页
               }
