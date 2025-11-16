@@ -531,29 +531,38 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
                     input_elem = await page.query_selector(selector)
                     if input_elem and await input_elem.is_visible() and await input_elem.is_enabled():
                         totp_input = input_elem
-                        logger.debug(f"✅ 找到TOTP输入框，使用选择器: {selector}")
+                        logger.debug(f\"✅ 找到TOTP输入框，使用选择器: {selector}\")
+                        print(f\"✅ 找到TOTP输入框，使用选择器: {selector}\")
                         break
                 except Exception:
                     continue
 
             if not totp_input:
-                # 调试：打印页面中的所有输入框
+                # 调试：打印页面中的所有输入框，帮助诊断问题
+                print(\"❌ 未找到TOTP输入框，开始诊断...\")
                 try:
                     all_inputs = await page.query_selector_all('input')
-                    logger.debug(f"📋 页面中发现 {len(all_inputs)} 个输入框")
+                    print(f\"📋 页面中发现 {len(all_inputs)} 个输入框\")
                     for i, input_elem in enumerate(all_inputs[:MAX_DEBUG_INPUTS]):
                         try:
-                            input_type = await input_elem.get_attribute("type") or "text"
-                            input_name = await input_elem.get_attribute("name") or ""
-                            input_id = await input_elem.get_attribute("id") or ""
+                            input_type = await input_elem.get_attribute(\"type\") or \"text\"
+                            input_name = await input_elem.get_attribute(\"name\") or \"\"
+                            input_id = await input_elem.get_attribute(\"id\") or \"\"
+                            input_class = await input_elem.get_attribute(\"class\") or \"\"
+                            input_placeholder = await input_elem.get_attribute(\"placeholder\") or \"\"
                             is_visible = await input_elem.is_visible()
                             is_enabled = await input_elem.is_enabled()
-                            logger.debug(f"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}, visible={is_visible}, enabled={is_enabled}")
-                        except Exception:
+                            
+                            print(f\"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}\")
+                            print(f\"            class={input_class}, placeholder={input_placeholder}\")
+                            print(f\"            visible={is_visible}, enabled={is_enabled}\")
+                        except Exception as e:
+                            print(f\"   输入框{i+1}: 获取属性失败 - {e}\")
                             continue
-                except Exception:
-                    pass
-                return False, "找不到TOTP输入框"
+                except Exception as debug_error:
+                    print(f\"⚠️ 调试时出错: {debug_error}\")
+                    
+                return False, \"找不到TOTP输入框 - 已打印页面输入框诊断信息\"
 
             await totp_input.fill(totp_code)
             await asyncio.sleep(1)
