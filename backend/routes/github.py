@@ -24,6 +24,7 @@ from models.schemas import (
 from utils.auth import get_current_user
 from utils.encryption import encrypt_data, decrypt_data
 from utils.totp import generate_totp_token, validate_totp_secret
+from utils.timezone import ensure_utc
 
 router = APIRouter()
 
@@ -79,8 +80,8 @@ async def create_github_account(
         user_id=new_account.user_id,
         username=new_account.username,
         group_id=new_account.group_id,
-        created_at=new_account.created_at,
-        updated_at=new_account.updated_at
+        created_at=ensure_utc(new_account.created_at),
+        updated_at=ensure_utc(new_account.updated_at)
     )
     
     return GitHubAccountResponse(
@@ -107,8 +108,8 @@ async def get_github_accounts(
             user_id=account.user_id,
             username=account.username,
             group_id=account.group_id,
-            created_at=account.created_at,
-            updated_at=account.updated_at
+            created_at=ensure_utc(account.created_at),
+            updated_at=ensure_utc(account.updated_at)
         )
         for account in accounts
     ]
@@ -157,8 +158,8 @@ async def get_github_account(
         group_id=account.group_id,
         password=decrypted_password,  # 真实密码
         totp_secret=decrypted_totp_secret,  # 真实密钥
-        created_at=account.created_at,
-        updated_at=account.updated_at
+        created_at=ensure_utc(account.created_at),
+        updated_at=ensure_utc(account.updated_at)
     )
     
     return GitHubAccountResponse(
@@ -212,16 +213,16 @@ async def update_github_account(
     
     db.commit()
     db.refresh(account)
-    
+
     safe_account = GitHubAccountSafe(
         id=account.id,
         user_id=account.user_id,
         username=account.username,
         group_id=account.group_id,
-        created_at=account.created_at,
-        updated_at=account.updated_at
+        created_at=ensure_utc(account.created_at),
+        updated_at=ensure_utc(account.updated_at)
     )
-    
+
     return GitHubAccountResponse(
         success=True,
         message="账号更新成功",

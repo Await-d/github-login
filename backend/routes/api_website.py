@@ -15,6 +15,7 @@ from models.schemas import (
 from utils.encryption import encrypt_data, decrypt_data
 from utils.auth import get_current_user
 from utils.website_simulator import website_simulator
+from utils.timezone import ensure_utc
 
 router = APIRouter()
 
@@ -39,10 +40,10 @@ async def get_api_websites(
                 login_url=website.login_url,
                 username=website.username,
                 is_logged_in=website.is_logged_in,
-                last_login_time=website.last_login_time,
+                last_login_time=ensure_utc(website.last_login_time),
                 balance=website.balance,
-                created_at=website.created_at,
-                updated_at=website.updated_at
+                created_at=ensure_utc(website.created_at),
+                updated_at=ensure_utc(website.updated_at)
             )
             safe_websites.append(safe_website)
         
@@ -97,11 +98,11 @@ async def get_api_website(
             username=website.username,
             password=decrypted_password,
             is_logged_in=website.is_logged_in,
-            last_login_time=website.last_login_time,
+            last_login_time=ensure_utc(website.last_login_time),
             balance=website.balance,
             api_keys=decrypted_api_keys,
-            created_at=website.created_at,
-            updated_at=website.updated_at
+            created_at=ensure_utc(website.created_at),
+            updated_at=ensure_utc(website.updated_at)
         )
         
         return ApiWebsiteResponse(
@@ -166,12 +167,12 @@ async def create_api_website(
             login_url=new_website.login_url,
             username=new_website.username,
             is_logged_in=new_website.is_logged_in,
-            last_login_time=new_website.last_login_time,
+            last_login_time=ensure_utc(new_website.last_login_time),
             balance=new_website.balance,
-            created_at=new_website.created_at,
-            updated_at=new_website.updated_at
+            created_at=ensure_utc(new_website.created_at),
+            updated_at=ensure_utc(new_website.updated_at)
         )
-        
+
         return ApiWebsiteResponse(
             success=True,
             message="API网站账号创建成功",
@@ -225,7 +226,7 @@ async def update_api_website(
         
         db.commit()
         db.refresh(website)
-        
+
         # 返回安全格式的信息
         safe_website = ApiWebsiteSafe(
             id=website.id,
@@ -235,12 +236,12 @@ async def update_api_website(
             login_url=website.login_url,
             username=website.username,
             is_logged_in=website.is_logged_in,
-            last_login_time=website.last_login_time,
+            last_login_time=ensure_utc(website.last_login_time),
             balance=website.balance,
-            created_at=website.created_at,
-            updated_at=website.updated_at
+            created_at=ensure_utc(website.created_at),
+            updated_at=ensure_utc(website.updated_at)
         )
-        
+
         return ApiWebsiteResponse(
             success=True,
             message="API网站账号更新成功",
@@ -428,7 +429,7 @@ async def get_account_info(
             message="获取账户信息成功",
             balance=website.balance,
             api_keys=api_keys,
-            last_updated=website.updated_at
+            last_updated=ensure_utc(website.updated_at)
         )
         
     except Exception as e:

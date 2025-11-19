@@ -4,8 +4,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from sqlalchemy import func
+from datetime import datetime, timezone
 import asyncio
 
 from models.database import get_db, User, GitHubAccount
@@ -28,6 +29,7 @@ from utils.auth import get_current_user
 from utils.encryption import decrypt_data
 from utils.github_star import parse_repository_url, star_repository_simple
 from utils.repository_star_queue import repository_star_queue
+from utils.timezone import ensure_utc
 from utils.rate_limiter import (
     check_batch_execute_rate_limit,
     check_task_execute_rate_limit,
@@ -35,6 +37,11 @@ from utils.rate_limiter import (
 )
 
 router = APIRouter()
+
+
+def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """确保datetime对象带有UTC时区信息 - 使用公共函数"""
+    return ensure_utc(dt)
 
 
 # 队列执行器函数
@@ -545,21 +552,21 @@ async def get_task_records(
     records = db.query(RepositoryStarRecord).filter(
         RepositoryStarRecord.task_id == task_id
     ).order_by(RepositoryStarRecord.executed_at.desc()).all()
-    
+
     # 转换为schema并添加GitHub用户名
     records_with_username = []
     for record in records:
         github_account = db.query(GitHubAccount).filter(
             GitHubAccount.id == record.github_account_id
         ).first()
-        
+
         record_schema = RepositoryStarRecordSchema(
             id=record.id,
             task_id=record.task_id,
             github_account_id=record.github_account_id,
             status=record.status,
             error_message=record.error_message,
-            executed_at=record.executed_at,
+            executed_at=_ensure_utc(record.executed_at),
             github_username=github_account.username if github_account else "未知"
         )
         records_with_username.append(record_schema)
@@ -1001,8 +1008,8 @@ def _get_task_with_stats(db: Session, task: RepositoryStarTask) -> RepositorySta
         owner=task.owner,
         repo_name=task.repo_name,
         description=task.description,
-        created_at=task.created_at,
-        updated_at=task.updated_at,
+        created_at=_ensure_utc(task.created_at),
+        updated_at=_ensure_utc(task.updated_at),
         total_accounts=total_accounts or 0,
         starred_accounts=starred_accounts or 0,
         success_count=success_count or 0,

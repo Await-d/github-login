@@ -487,9 +487,11 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
 
         await login_button.click()
         await asyncio.sleep(3)
-        
+
         # 检查是否需要2FA
         current_url = page.url
+        page_content = await page.content()
+
         if 'two-factor' in current_url or 'sessions/two-factor' in current_url:
             print("🔐 需要2FA验证...")
 
@@ -498,13 +500,80 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
             totp_info = generate_totp_token(totp_secret)
             totp_code = totp_info['token']
 
+            # === 新增：检查是否在WebAuthn页面，需要切换到TOTP ===
+            if 'webauthn' in current_url or 'webauthn' in page_content.lower():
+                print("🔍 检测到WebAuthn页面，尝试切换到TOTP验证...")
+
+                # 方法1：尝试直接访问authenticator app页面
+                try:
+                    totp_url = "https://github.com/sessions/two-factor/app"
+                    print(f"🔄 直接访问TOTP页面: {totp_url}")
+                    await page.goto(totp_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                    await asyncio.sleep(3)
+
+                    # 更新页面信息
+                    current_url = page.url
+                    page_content = await page.content()
+                    print(f"🔍 切换后当前URL: {current_url}")
+
+                except Exception as e:
+                    print(f"⚠️ 直接访问TOTP页面失败: {e}")
+
+                    # 方法2：尝试点击"More options"和"Authenticator app"
+                    try:
+                        print("🔄 尝试点击More options按钮...")
+                        more_options_selectors = [
+                            "button.more-options-two-factor",
+                            "button[class*='more-options']",
+                            "button:has-text('More options')"
+                        ]
+
+                        more_options_clicked = False
+                        for selector in more_options_selectors:
+                            try:
+                                btn = await page.query_selector(selector)
+                                if btn and await btn.is_visible():
+                                    print(f"🎯 点击More options按钮: {selector}")
+                                    await btn.click()
+                                    await asyncio.sleep(2)
+                                    more_options_clicked = True
+                                    break
+                            except:
+                                continue
+
+                        if more_options_clicked:
+                            print("🔍 查找Authenticator app链接...")
+                            app_link_selectors = [
+                                "a[href='/sessions/two-factor/app']",
+                                "a[data-test-selector='totp-app-link']",
+                                "a:has-text('Authenticator app')"
+                            ]
+
+                            for selector in app_link_selectors:
+                                try:
+                                    link = await page.query_selector(selector)
+                                    if link and await link.is_visible():
+                                        print(f"🎯 点击Authenticator app链接: {selector}")
+                                        await link.click()
+                                        await asyncio.sleep(3)
+
+                                        # 更新页面��息
+                                        current_url = page.url
+                                        page_content = await page.content()
+                                        print(f"🔍 切换后当前URL: {current_url}")
+                                        break
+                                except:
+                                    continue
+                    except Exception as e2:
+                        print(f"⚠️ 点击More options方法失败: {e2}")
+
             # 填写TOTP验证码
-            # 使用全面的选择器列表，提高兼容性
+            # 使用增强的选择器列表（参考定时任务中成功的逻辑）
             totp_selectors = [
-                "input[name='app_otp']",  # GitHub TOTP应用 (优先)
-                "input[id='app_totp']",   # GitHub TOTP应用ID
-                "input[name='app_totp']", # GitHub TOTP应用名称
-                "input[name='otp']",      # 通用OTP
+                "input[name='otp']",           # 通用OTP (优先，GitHub常用)
+                "input[name='app_otp']",       # GitHub TOTP应用
+                "input[id='app_totp']",        # GitHub TOTP应用ID
+                "input[name='app_totp']",      # GitHub TOTP应用名称
                 "input[autocomplete='one-time-code']",  # HTML5标准
                 "input[type='text'][autocomplete*='code']",
                 "input[id='otp']",
@@ -518,53 +587,58 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
                 "input[data-testid*='otp']",
                 "input[aria-label*='code']",
                 "input[aria-label*='verification']",
-                "input[name='sms_otp']",  # GitHub SMS选项
+                "input[name='sms_otp']",       # GitHub SMS选项
                 "input[class*='form-control'][maxlength='6']",
                 "input[type='tel'][maxlength='6']",
                 "input[inputmode='numeric'][maxlength='6']"
             ]
 
-            logger.debug("🔍 搜索TOTP输入框...")
+            print("🔍 搜索TOTP输入框...")
+
+            # 等待2FA页面完全加载
+            await asyncio.sleep(3)
+
             totp_input = None
             for selector in totp_selectors:
                 try:
                     input_elem = await page.query_selector(selector)
                     if input_elem and await input_elem.is_visible() and await input_elem.is_enabled():
                         totp_input = input_elem
-                        logger.debug(f\"✅ 找到TOTP输入框，使用选择器: {selector}\")
-                        print(f\"✅ 找到TOTP输入框，使用选择器: {selector}\")
+                        print(f"✅ 找到TOTP输入框，使用选择器: {selector}")
                         break
                 except Exception:
                     continue
 
             if not totp_input:
                 # 调试：打印页面中的所有输入框，帮助诊断问题
-                print(\"❌ 未找到TOTP输入框，开始诊断...\")
+                print("❌ 未找到TOTP输入框，开始诊断...")
+                print(f"🔍 当前URL: {current_url}")
                 try:
                     all_inputs = await page.query_selector_all('input')
-                    print(f\"📋 页面中发现 {len(all_inputs)} 个输入框\")
+                    print(f"📋 页面中发现 {len(all_inputs)} 个输入框")
                     for i, input_elem in enumerate(all_inputs[:MAX_DEBUG_INPUTS]):
                         try:
-                            input_type = await input_elem.get_attribute(\"type\") or \"text\"
-                            input_name = await input_elem.get_attribute(\"name\") or \"\"
-                            input_id = await input_elem.get_attribute(\"id\") or \"\"
-                            input_class = await input_elem.get_attribute(\"class\") or \"\"
-                            input_placeholder = await input_elem.get_attribute(\"placeholder\") or \"\"
+                            input_type = await input_elem.get_attribute("type") or "text"
+                            input_name = await input_elem.get_attribute("name") or ""
+                            input_id = await input_elem.get_attribute("id") or ""
+                            input_class = await input_elem.get_attribute("class") or ""
+                            input_placeholder = await input_elem.get_attribute("placeholder") or ""
                             is_visible = await input_elem.is_visible()
                             is_enabled = await input_elem.is_enabled()
-                            
-                            print(f\"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}\")
-                            print(f\"            class={input_class}, placeholder={input_placeholder}\")
-                            print(f\"            visible={is_visible}, enabled={is_enabled}\")
+
+                            print(f"   输入框{i+1}: type={input_type}, name={input_name}, id={input_id}")
+                            print(f"            class={input_class}, placeholder={input_placeholder}")
+                            print(f"            visible={is_visible}, enabled={is_enabled}")
                         except Exception as e:
-                            print(f\"   输入框{i+1}: 获取属性失败 - {e}\")
+                            print(f"   输入框{i+1}: 获取属性失败 - {e}")
                             continue
                 except Exception as debug_error:
-                    print(f\"⚠️ 调试时出错: {debug_error}\")
-                    
-                return False, \"找不到TOTP输入框 - 已打印页面输入框诊断信息\"
+                    print(f"⚠️ 调试时出错: {debug_error}")
+
+                return False, f"找不到TOTP输入框 (URL: {current_url})"
 
             await totp_input.fill(totp_code)
+            print(f"✅ 已填写TOTP验证码")
             await asyncio.sleep(1)
 
             # 提交2FA验证
@@ -572,10 +646,12 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
             try:
                 verify_button = await page.query_selector('button[type="submit"]')
                 if verify_button:
+                    print("🖱️ 点击验证按钮")
                     await verify_button.click()
                 await asyncio.sleep(3)
             except:
                 # 可能已自动提交
+                print("ℹ️ 未找到提交按钮，可能已自动提交")
                 pass
 
         # 验证登录是否成功

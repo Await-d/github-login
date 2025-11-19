@@ -29,18 +29,14 @@ from models.schemas import (
     AccountBalanceSnapshotSchema
 )
 from utils.auth import get_current_user
+from utils.timezone import ensure_utc
 
 router = APIRouter()
 
 
 def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    if dt is None:
-        return None
-    if isinstance(dt, str):
-        dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+    """确保datetime对象带有UTC时区信息 - 使用公共函数"""
+    return ensure_utc(dt)
 
 
 @router.get("/tasks", response_model=ScheduledTaskResponse)
