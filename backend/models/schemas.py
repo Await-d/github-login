@@ -121,7 +121,7 @@ class GitHubAccountSafe(BaseModel):
     username: str
     password: Optional[str] = None  # 可选，用于查看详情时
     totp_secret: Optional[str] = None  # 可选，用于查看详情时
-    created_at: str
+    created_at: datetime
     updated_at: datetime
 
     class Config:
