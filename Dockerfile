@@ -73,6 +73,9 @@ RUN playwright install chromium
 # 复制后端项目文件
 COPY backend/ /app/backend/
 
+# 复制 VERSION 文件到项目根目录
+COPY VERSION /app/VERSION
+
 # 从前端构建阶段复制构建好的文件
 COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 
