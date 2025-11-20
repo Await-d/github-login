@@ -117,6 +117,27 @@ async def _queue_executor(
 
             # 对该账号执行所有仓库的收藏操作
             for repo_idx, (task_id, repository_url) in enumerate(task_items):
+                # 如果不是强制执行，检查该账号-任务对是否已经成功
+                if not force_execute:
+                    existing_record = db.query(RepositoryStarRecord).filter(
+                        RepositoryStarRecord.task_id == task_id,
+                        RepositoryStarRecord.github_account_id == account_id,
+                        RepositoryStarRecord.status.in_(['success', 'already_starred'])
+                    ).first()
+
+                    if existing_record:
+                        print(f"  ⏭️ 跳过已成功的仓库: {repository_url}")
+                        # 记录到详情中
+                        details.append({
+                            "task_id": task_id,
+                            "account_id": account_id,
+                            "username": account.username,
+                            "status": "skipped",
+                            "message": "该账号已成功收藏此仓库，跳过执行"
+                        })
+                        total_already_starred_count += 1
+                        continue
+
                 # 仓库间延迟（除了该账号的第一个仓库）
                 if repo_idx > 0:
                     repo_delay = random.uniform(1, 3)  # 仓库间延迟较短
@@ -487,7 +508,24 @@ async def execute_repository_star_task(
         all_accounts = db.query(GitHubAccount).filter(
             GitHubAccount.user_id == current_user.id
         ).all()
-        account_ids = [acc.id for acc in all_accounts]
+        all_account_ids = [acc.id for acc in all_accounts]
+
+        # 如果不是强制执行，则排除已经成功的账号
+        if not execute_data.force_execute:
+            # 查询该任务已经成功或已收藏的账号
+            successful_account_ids = db.query(RepositoryStarRecord.github_account_id).filter(
+                RepositoryStarRecord.task_id == task_id,
+                RepositoryStarRecord.status.in_(['success', 'already_starred'])
+            ).distinct().all()
+            successful_account_ids = [acc_id[0] for acc_id in successful_account_ids]
+
+            # 排除已成功的账号
+            account_ids = [acc_id for acc_id in all_account_ids if acc_id not in successful_account_ids]
+
+            if successful_account_ids:
+                print(f"ℹ️ 跳过已成功的{len(successful_account_ids)}个账号")
+        else:
+            account_ids = all_account_ids
 
     if not account_ids:
         return RepositoryStarExecuteResponse(
@@ -725,13 +763,36 @@ async def batch_execute_repository_star_tasks(
     all_accounts = db.query(GitHubAccount).filter(
         GitHubAccount.user_id == current_user.id
     ).all()
-    account_ids = [acc.id for acc in all_accounts]
+    all_account_ids = [acc.id for acc in all_accounts]
 
-    if not account_ids:
+    if not all_account_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="没有可用的GitHub账号"
         )
+
+    # 如果不是强制执行，需要过滤每个任务已成功的账号
+    if not execute_data.force_execute:
+        # 查询所有任务的成功记录
+        successful_records = db.query(
+            RepositoryStarRecord.task_id,
+            RepositoryStarRecord.github_account_id
+        ).filter(
+            RepositoryStarRecord.task_id.in_(execute_data.task_ids),
+            RepositoryStarRecord.status.in_(['success', 'already_starred'])
+        ).all()
+
+        # 构建任务-账号成功集合
+        successful_pairs = set((record.task_id, record.github_account_id) for record in successful_records)
+
+        # 过滤任务项：只包含未成功的账号-任务对
+        # 注意：这里我们需要在_queue_executor中进行更细粒度的过滤
+        # 所以这里先保持所有账号，在执行器中根据每个任务过滤
+        account_ids = all_account_ids
+
+        print(f"ℹ️ 非强制执行模式：将跳过已成功的账号-任务对（共{len(successful_pairs)}对）")
+    else:
+        account_ids = all_account_ids
 
     # ========== 新逻辑：将所有任务作为一个批处理加入队列 ==========
     # 构建任务项列表 [(task_id, repository_url), ...]
