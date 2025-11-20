@@ -123,7 +123,7 @@ async def _save_debug_screenshot(page, username: str, stage: str, error_msg: str
         return None
 
 
-async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: str = "unknown") -> bool:
+async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: str = "unknown", totp_secret: str = "") -> bool:
     """
     处理GitHub 2FA安全检查页面
 
@@ -131,6 +131,7 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: st
         page: Playwright page对象
         repo_url: 可选的仓库URL,如果提供则在跳过后重新访问该URL
         username: GitHub用户名，用于截图文件命名
+        totp_secret: TOTP密钥，用于在需要验证时填写验证码
 
     Returns:
         True 如果成功处理或不在checkup页面, False 如果处理失败
@@ -146,7 +147,73 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: st
     if 'two_factor_checkup' not in current_url and 'settings/security' not in current_url:
         return True  # 不在checkup页面,无需处理
 
-    print("🔍 检测到GitHub 2FA安全检查页面,尝试跳过...")
+    print("🔍 检测到GitHub 2FA检查页面...")
+
+    # 首先检查是否需要输入TOTP验证码（有些checkup页面要求验证2FA）
+    totp_input = None
+    totp_input_selectors = [
+        'input[name="app_otp"]',
+        'input[id="app_totp"]',
+        'input[name="otp"]',
+        'input.js-verification-code-input-auto-submit'
+    ]
+
+    for selector in totp_input_selectors:
+        try:
+            elem = await page.query_selector(selector)
+            if elem and await elem.is_visible():
+                totp_input = elem
+                print(f"🔍 检测到TOTP验证输入框: {selector}")
+                break
+        except Exception:
+            continue
+
+    # 如果找到TOTP输入框，说明需要验证2FA
+    if totp_input and totp_secret:
+        print("🔐 此checkup页面要求验证2FA，正在填写TOTP验证码...")
+        try:
+            import pyotp
+            totp = pyotp.TOTP(totp_secret)
+            totp_code = totp.now()
+
+            await totp_input.fill(totp_code)
+            print(f"✅ 已填写TOTP验证码")
+            await asyncio.sleep(1)
+
+            # 查找并点击Verify按钮
+            verify_button = await page.query_selector('button:has-text("Verify")')
+            if verify_button and await verify_button.is_visible():
+                print("🖱️ 点击Verify按钮")
+                await verify_button.click()
+                await asyncio.sleep(3)
+
+                # 检查是否已离开checkup页面
+                current_url = page.url
+                if 'two_factor_checkup' not in current_url:
+                    print(f"✅ 2FA验证成功，已离开checkup页面: {current_url}")
+                    if repo_url:
+                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                        await asyncio.sleep(2)
+                        print(f"🔗 验证后重新访问仓库: {repo_url}")
+                    return True
+                else:
+                    print("⚠️ 点击Verify按钮后仍在checkup页面，可能验证失败")
+            else:
+                # 可能自动提交
+                await asyncio.sleep(3)
+                current_url = page.url
+                if 'two_factor_checkup' not in current_url:
+                    print(f"✅ 2FA验证成功（自动提交），已离开checkup页面: {current_url}")
+                    if repo_url:
+                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                        await asyncio.sleep(2)
+                        print(f"🔗 验证后重新访问仓库: {repo_url}")
+                    return True
+        except Exception as e:
+            print(f"⚠️ 填写TOTP验证码时出错: {e}")
+            # 继续尝试跳过
+
+    print("🔍 尝试跳过2FA检查页面...")
 
     # 跳过按钮选择器列表（移除了重复的大小写变体）
     skip_selectors = [
@@ -330,7 +397,7 @@ async def star_github_repository(
                         return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
-                await _handle_2fa_checkup(page, repo_url, github_username)
+                await _handle_2fa_checkup(page, repo_url, github_username, totp_secret)
 
                 # 4. 查找Star按钮并检查状态
                 try:
@@ -720,7 +787,7 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
         await asyncio.sleep(2)
 
         # 处理 GitHub 的 2FA checkup 页面（安全检查）
-        await _handle_2fa_checkup(page, username=username)
+        await _handle_2fa_checkup(page, username=username, totp_secret=totp_secret)
 
         # 更新当前URL
         current_url = page.url
@@ -886,7 +953,7 @@ async def unstar_github_repository(
                         return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
-                await _handle_2fa_checkup(page, repo_url, github_username)
+                await _handle_2fa_checkup(page, repo_url, github_username, totp_secret)
 
                 # 4. 查找Star按钮并检查状态
                 try:
