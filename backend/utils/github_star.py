@@ -118,16 +118,26 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None) -> bool:
             if skip_btn and await skip_btn.is_visible():
                 print(f"✅ 找到跳过按钮: {selector}")
                 await skip_btn.click()
-                await asyncio.sleep(CHECKUP_SKIP_TIMEOUT)
                 skip_button_found = True
 
-                # 如果提供了repo_url,则重新访问仓库页面
-                if repo_url:
-                    await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                    await asyncio.sleep(2)
-                    print(f"🔗 跳过2FA检查后重新访问仓库: {repo_url}")
-                else:
-                    print(f"🔗 跳过2FA检查后URL: {page.url}")
+                # 点击后等待页面跳转离开checkup页面
+                print("⏳ 等待页面跳转...")
+                for i in range(CHECKUP_AUTO_REDIRECT_MAX_WAIT):
+                    await asyncio.sleep(1)
+                    current_url = page.url
+                    if 'two_factor_checkup' not in current_url and 'settings/security' not in current_url:
+                        print(f"✅ 已成功离开2FA检查页面: {current_url}")
+                        # 如果提供了repo_url,则重新访问仓库页面
+                        if repo_url:
+                            await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                            await asyncio.sleep(2)
+                            print(f"🔗 跳过2FA检查后重新访问仓库: {repo_url}")
+                        return True
+                    if i % 5 == 0 and i > 0:
+                        print(f"⏳ 等待离开2FA检查页面... ({i}/{CHECKUP_AUTO_REDIRECT_MAX_WAIT}秒)")
+
+                # 如果等待30秒后仍在checkup页面，打印警告但继续
+                print(f"⚠️ 点击跳过按钮后等待超时，当前仍在: {page.url}")
                 break
         except PlaywrightTimeoutError:
             # 元素未找到,尝试下一个选择器
