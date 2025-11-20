@@ -123,6 +123,52 @@ async def _save_debug_screenshot(page, username: str, stage: str, error_msg: str
         return None
 
 
+async def _handle_recovery_codes_page(page, username: str = "unknown") -> bool:
+    """
+    处理2FA验证成功后的恢复代码提醒页面
+
+    Args:
+        page: Playwright page对象
+        username: GitHub用户名
+
+    Returns:
+        True 如果成功处理或不在恢复代码页面
+    """
+    try:
+        # 检查是否在恢复代码页面
+        success_text = await page.query_selector('text="2FA verification successful"')
+        if not success_text:
+            return True  # 不在恢复代码页面
+
+        print("🔍 检测到恢复代码提醒页面...")
+
+        # 查找Done按钮
+        done_button_selectors = [
+            'button:has-text("Done")',
+            'a:has-text("Done")',
+            'button[type="submit"]:has-text("Done")'
+        ]
+
+        for selector in done_button_selectors:
+            try:
+                button = await page.query_selector(selector)
+                if button and await button.is_visible():
+                    print(f"🖱️ 点击Done按钮: {selector}")
+                    await button.click()
+                    await asyncio.sleep(3)
+                    print(f"✅ 已完成恢复代码页面处理")
+                    return True
+            except Exception:
+                continue
+
+        print("⚠️ 未找到Done按钮，尝试继续...")
+        return True
+
+    except Exception as e:
+        print(f"⚠️ 处理恢复代码页面时出错: {e}")
+        return True
+
+
 async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: str = "unknown", totp_secret: str = "") -> bool:
     """
     处理GitHub 2FA安全检查页面
@@ -171,47 +217,98 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: st
     # 如果找到TOTP输入框，说明需要验证2FA
     if totp_input and totp_secret:
         print("🔐 此checkup页面要求验证2FA，正在填写TOTP验证码...")
-        try:
-            import pyotp
-            totp = pyotp.TOTP(totp_secret)
-            totp_code = totp.now()
 
-            await totp_input.fill(totp_code)
-            print(f"✅ 已填写TOTP验证码")
-            await asyncio.sleep(1)
+        # 最多重试2次（共3次尝试）
+        max_retries = 2
+        for retry in range(max_retries + 1):
+            try:
+                import pyotp
+                totp = pyotp.TOTP(totp_secret)
+                totp_code = totp.now()
 
-            # 查找并点击Verify按钮
-            verify_button = await page.query_selector('button:has-text("Verify")')
-            if verify_button and await verify_button.is_visible():
-                print("🖱️ 点击Verify按钮")
-                await verify_button.click()
-                await asyncio.sleep(3)
+                # 清空输入框再填写
+                await totp_input.click()
+                await totp_input.fill('')
+                await asyncio.sleep(0.5)
+                await totp_input.fill(totp_code)
+                print(f"✅ 已填写TOTP验证码 (尝试 {retry + 1}/{max_retries + 1})")
+                await asyncio.sleep(1)
 
-                # 检查是否已离开checkup页面
-                current_url = page.url
-                if 'two_factor_checkup' not in current_url:
-                    print(f"✅ 2FA验证成功，已离开checkup页面: {current_url}")
-                    if repo_url:
-                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                        await asyncio.sleep(2)
-                        print(f"🔗 验证后重新访问仓库: {repo_url}")
-                    return True
+                # 查找并点击Verify按钮
+                verify_button = await page.query_selector('button:has-text("Verify")')
+                if verify_button and await verify_button.is_visible():
+                    print("🖱️ 点击Verify按钮")
+                    await verify_button.click()
+                    await asyncio.sleep(5)  # 等待更长时间让验证完成
+
+                    # 检查是否验证失败
+                    error_msg = await page.query_selector('text="Two factor authentication failed"')
+                    if error_msg and await error_msg.is_visible():
+                        print(f"⚠️ TOTP验证失败 (尝试 {retry + 1}/{max_retries + 1})")
+                        if retry < max_retries:
+                            print("🔄 等待30秒后重试...")
+                            await asyncio.sleep(30)  # 等待30秒确保生成新的TOTP码
+                            # 重新查找输入框
+                            totp_input = await page.query_selector('input[name="app_otp"]')
+                            if not totp_input:
+                                print("❌ 无法找到TOTP输入框，停止重试")
+                                break
+                            continue
+                        else:
+                            print("❌ 已达到最大重试次数，验证失败")
+                            await _save_debug_screenshot(page, username, "checkup_totp_failed", "TOTP验证失败3次")
+                            break
+
+                    # 检查是否已离开checkup页面
+                    current_url = page.url
+                    if 'two_factor_checkup' not in current_url:
+                        print(f"✅ 2FA验证成功，已离开checkup页面: {current_url}")
+
+                        # 检查是否在恢复代码提醒页面
+                        await _handle_recovery_codes_page(page, username)
+
+                        if repo_url:
+                            await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                            await asyncio.sleep(2)
+                            print(f"🔗 验证后重新访问仓库: {repo_url}")
+                        return True
+                    else:
+                        # 仍在checkup页面但没有错误提示，可能正在处理
+                        print("⏳ 等待验证结果...")
+                        await asyncio.sleep(3)
+                        current_url = page.url
+                        if 'two_factor_checkup' not in current_url:
+                            print(f"✅ 2FA验证成功: {current_url}")
+                            await _handle_recovery_codes_page(page, username)
+                            if repo_url:
+                                await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                                await asyncio.sleep(2)
+                                print(f"🔗 验证后重新访问仓库: {repo_url}")
+                            return True
                 else:
-                    print("⚠️ 点击Verify按钮后仍在checkup页面，可能验证失败")
-            else:
-                # 可能自动提交
-                await asyncio.sleep(3)
-                current_url = page.url
-                if 'two_factor_checkup' not in current_url:
-                    print(f"✅ 2FA验证成功（自动提交），已离开checkup页面: {current_url}")
-                    if repo_url:
-                        await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
-                        await asyncio.sleep(2)
-                        print(f"🔗 验证后重新访问仓库: {repo_url}")
-                    return True
-        except Exception as e:
-            print(f"⚠️ 填写TOTP验证码时出错: {e}")
-            # 继续尝试跳过
+                    # 可能自动提交
+                    await asyncio.sleep(5)
+                    current_url = page.url
+                    if 'two_factor_checkup' not in current_url:
+                        print(f"✅ 2FA验证成功（自动提交）: {current_url}")
+                        await _handle_recovery_codes_page(page, username)
+                        if repo_url:
+                            await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
+                            await asyncio.sleep(2)
+                            print(f"🔗 验证后重新访问仓库: {repo_url}")
+                        return True
+
+                # 如果没有continue，说明验证成功或失败，退出循环
+                break
+
+            except Exception as e:
+                print(f"⚠️ 填写TOTP验证码时出错: {e}")
+                if retry < max_retries:
+                    print(f"🔄 等待10秒后重试...")
+                    await asyncio.sleep(10)
+                    continue
+                else:
+                    break
 
     print("🔍 尝试跳过2FA检查页面...")
 
@@ -789,8 +886,17 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
         # 处理 GitHub 的 2FA checkup 页面（安全检查）
         await _handle_2fa_checkup(page, username=username, totp_secret=totp_secret)
 
+        # 处理恢复代码提醒页面
+        await _handle_recovery_codes_page(page, username)
+
         # 更新当前URL
         current_url = page.url
+
+        # 检查是否在恢复代码页面（验证成功的标志）
+        success_text = await page.query_selector('text="2FA verification successful"')
+        if success_text:
+            print("✅ 检测到2FA验证成功页面")
+            return True, "GitHub登录成功"
 
         # 如果不再在登录页面，且不在2FA页面，则认为登录成功
         if 'login' not in current_url and 'two-factor' not in current_url and 'two_factor_checkup' not in current_url:
