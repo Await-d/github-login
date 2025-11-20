@@ -8,9 +8,15 @@ import logging
 from typing import Tuple, Optional
 from urllib.parse import urlparse
 import asyncio
+from datetime import datetime
+from pathlib import Path
 
 # 配置日志
 logger = logging.getLogger(__name__)
+
+# 截图目录
+SCREENSHOT_DIR = Path("/app/backend/data/screenshots")
+SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 配置常量
 CHECKUP_SKIP_TIMEOUT = 3  # 点击跳过按钮后等待时间（秒）
@@ -75,13 +81,56 @@ def parse_repository_url(repo_url: str) -> Tuple[Optional[str], Optional[str]]:
         return None, None
 
 
-async def _handle_2fa_checkup(page, repo_url: Optional[str] = None) -> bool:
+async def _save_debug_screenshot(page, username: str, stage: str, error_msg: str = "") -> Optional[str]:
+    """
+    保存调试截图
+
+    Args:
+        page: Playwright page对象
+        username: GitHub用户名
+        stage: 失败阶段（如 "login", "2fa", "checkup", "star"）
+        error_msg: 错误信息
+
+    Returns:
+        截图文件路径，失败则返回None
+    """
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 安全的文件名（移除特殊字符）
+        safe_username = re.sub(r'[^\w\-]', '_', username)
+        safe_stage = re.sub(r'[^\w\-]', '_', stage)
+
+        filename = f"{safe_username}_{safe_stage}_{timestamp}.png"
+        screenshot_path = SCREENSHOT_DIR / filename
+
+        # 保存截图
+        await page.screenshot(path=str(screenshot_path), full_page=True)
+
+        # 同时保存页面HTML用于详细调试
+        html_path = SCREENSHOT_DIR / f"{safe_username}_{safe_stage}_{timestamp}.html"
+        html_content = await page.content()
+        html_path.write_text(html_content, encoding='utf-8')
+
+        print(f"📸 已保存调试截图: {screenshot_path}")
+        print(f"📄 已保存页面HTML: {html_path}")
+        if error_msg:
+            print(f"   错误信息: {error_msg}")
+        print(f"   当前URL: {page.url}")
+
+        return str(screenshot_path)
+    except Exception as e:
+        print(f"⚠️ 保存截图失败: {e}")
+        return None
+
+
+async def _handle_2fa_checkup(page, repo_url: Optional[str] = None, username: str = "unknown") -> bool:
     """
     处理GitHub 2FA安全检查页面
 
     Args:
         page: Playwright page对象
         repo_url: 可选的仓库URL,如果提供则在跳过后重新访问该URL
+        username: GitHub用户名，用于截图文件命名
 
     Returns:
         True 如果成功处理或不在checkup页面, False 如果处理失败
@@ -136,8 +185,9 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None) -> bool:
                     if i % 5 == 0 and i > 0:
                         print(f"⏳ 等待离开2FA检查页面... ({i}/{CHECKUP_AUTO_REDIRECT_MAX_WAIT}秒)")
 
-                # 如果等待30秒后仍在checkup页面，打印警告但继续
+                # 如果等待30秒后仍在checkup页面，保存截图并打印警告
                 print(f"⚠️ 点击跳过按钮后等待超时，当前仍在: {page.url}")
+                await _save_debug_screenshot(page, username, "checkup_timeout_after_skip", "点击跳过按钮30秒后仍在checkup页面")
                 break
         except PlaywrightTimeoutError:
             # 元素未找到,尝试下一个选择器
@@ -159,9 +209,11 @@ async def _handle_2fa_checkup(page, repo_url: Optional[str] = None) -> bool:
             if i % 5 == 0 and i > 0:
                 print(f"⏳ 等待2FA检查页面自动重定向... ({i}/{CHECKUP_AUTO_REDIRECT_MAX_WAIT}秒)")
 
-        # 自动重定向超时,尝试重新访问仓库
+        # 自动重定向超时,保存截图并尝试重新访问仓库
+        print("⚠️ 自动重定向超时...")
+        await _save_debug_screenshot(page, username, "checkup_auto_redirect_timeout", "等待自动重定向30秒后超时")
         if repo_url:
-            print("⚠️ 自动重定向超时,尝试重新访问仓库...")
+            print("🔄 尝试重新访问仓库...")
             await asyncio.sleep(FALLBACK_WAIT_TIME)
             await page.goto(repo_url, wait_until='domcontentloaded', timeout=PAGE_LOAD_TIMEOUT)
             await asyncio.sleep(2)
@@ -278,7 +330,7 @@ async def star_github_repository(
                         return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
-                await _handle_2fa_checkup(page, repo_url)
+                await _handle_2fa_checkup(page, repo_url, github_username)
 
                 # 4. 查找Star按钮并检查状态
                 try:
@@ -668,7 +720,7 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
         await asyncio.sleep(2)
 
         # 处理 GitHub 的 2FA checkup 页面（安全检查）
-        await _handle_2fa_checkup(page)
+        await _handle_2fa_checkup(page, username=username)
 
         # 更新当前URL
         current_url = page.url
@@ -677,6 +729,9 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
         if 'login' not in current_url and 'two-factor' not in current_url and 'two_factor_checkup' not in current_url:
             return True, "GitHub登录成功"
         else:
+            # 登录失败，保存截图
+            await _save_debug_screenshot(page, username, "login_failed", f"登录后仍在页面: {current_url}")
+
             # 检查是否有错误提示
             error_msg = await page.query_selector('.flash-error')
             if error_msg:
@@ -684,8 +739,13 @@ async def _login_to_github(page, username: str, password: str, totp_secret: str)
                 return False, f"登录失败: {error_text}"
             else:
                 return False, "登录失败，用户名或密码可能不正确"
-        
+
     except Exception as e:
+        # 异常时也尝试截图
+        try:
+            await _save_debug_screenshot(page, username, "login_exception", str(e))
+        except:
+            pass
         return False, f"GitHub登录异常: {str(e)}"
 
 
@@ -826,7 +886,7 @@ async def unstar_github_repository(
                         return False, error
 
                 # 检查访问仓库后是否又被重定向到2FA checkup页面
-                await _handle_2fa_checkup(page, repo_url)
+                await _handle_2fa_checkup(page, repo_url, github_username)
 
                 # 4. 查找Star按钮并检查状态
                 try:
