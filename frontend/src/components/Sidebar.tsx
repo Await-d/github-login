@@ -1,5 +1,5 @@
-import React from 'react';
-import { Layout, Menu } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Layout, Menu, Typography } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   DashboardOutlined,
@@ -14,8 +14,10 @@ import {
   ScheduleOutlined
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
+import { systemAPI } from '../services/api';
 
 const { Sider } = Layout;
+const { Text } = Typography;
 
 interface SidebarProps {
   collapsed: boolean;
@@ -27,6 +29,21 @@ type MenuItem = Required<MenuProps>['items'][number];
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [version, setVersion] = useState<string>('');
+
+  useEffect(() => {
+    // 获取版本号
+    const fetchVersion = async () => {
+      try {
+        const res = await systemAPI.getVersion();
+        setVersion(res.data.version || 'unknown');
+      } catch (error) {
+        console.error('获取版本号失败', error);
+        setVersion('unknown');
+      }
+    };
+    fetchVersion();
+  }, []);
 
   const menuItems: MenuItem[] = [
     {
@@ -137,6 +154,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
         items={menuItems}
         style={{ borderRight: 0 }}
       />
+      <div style={{
+        position: 'absolute',
+        bottom: 16,
+        left: 0,
+        right: 0,
+        padding: '0 16px',
+        textAlign: 'center',
+        color: 'rgba(255, 255, 255, 0.65)'
+      }}>
+        {!collapsed && (
+          <Text style={{ fontSize: 12, color: 'rgba(255, 255, 255, 0.45)' }}>
+            版本 {version}
+          </Text>
+        )}
+      </div>
     </Sider>
   );
 };

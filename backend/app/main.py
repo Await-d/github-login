@@ -181,6 +181,17 @@ app.include_router(api_website.router, prefix="/api/api-website", tags=["API网�
 app.include_router(scheduled_tasks.router, prefix="/api/scheduled-tasks", tags=["定时任务管理"])
 app.include_router(repository_star.router, prefix="/api/repository-star", tags=["仓库收藏管理"])
 
+# 读取版本号
+def get_version():
+    """从VERSION文件读取版本号"""
+    try:
+        version_file = os.path.join(os.path.dirname(os.path.dirname(backend_dir)), "VERSION")
+        with open(version_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception as e:
+        print(f"⚠️ 读取VERSION文件失败: {e}")
+        return "unknown"
+
 # 健康检查
 @app.get("/api/health")
 async def health_check():
@@ -188,8 +199,19 @@ async def health_check():
     return {
         "success": True,
         "message": "GitHub Manager API is running",
-        "version": "2.0.0",
+        "version": get_version(),
         "tech_stack": "Python + FastAPI + React + Ant Design"
+    }
+
+# 获取版本信息
+@app.get("/api/version")
+async def get_version_info():
+    """获取系统版本信息"""
+    version = get_version()
+    return {
+        "success": True,
+        "version": version,
+        "message": "版本信息获取成功"
     }
 
 # 挂载静态文件 (React构建产物)

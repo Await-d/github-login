@@ -27,7 +27,7 @@ import {
   CheckCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { githubAPI, scheduledTasksAPI, repositoryStarAPI, apiWebsiteAPI } from '../services/api';
+import { githubAPI, scheduledTasksAPI, repositoryStarAPI, apiWebsiteAPI, systemAPI } from '../services/api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -39,6 +39,7 @@ const Dashboard: React.FC = () => {
     scheduledTasks: 0,
     apiWebsites: 0
   });
+  const [version, setVersion] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,11 +49,12 @@ const Dashboard: React.FC = () => {
   const loadStats = async () => {
     setLoading(true);
     try {
-      const [githubRes, repoRes, tasksRes, websitesRes] = await Promise.all([
+      const [githubRes, repoRes, tasksRes, websitesRes, versionRes] = await Promise.all([
         githubAPI.getAccounts().catch(() => ({ data: { accounts: [] } })),
         repositoryStarAPI.getTasks().catch(() => ({ data: { tasks: [] } })),
         scheduledTasksAPI.getTasks().catch(() => ({ data: { tasks: [] } })),
-        apiWebsiteAPI.getWebsites().catch(() => ({ data: { websites: [] } }))
+        apiWebsiteAPI.getWebsites().catch(() => ({ data: { websites: [] } })),
+        systemAPI.getVersion().catch(() => ({ data: { version: 'unknown' } }))
       ]);
 
       setStats({
@@ -61,6 +63,7 @@ const Dashboard: React.FC = () => {
         scheduledTasks: tasksRes.data.tasks?.length || 0,
         apiWebsites: websitesRes.data.websites?.length || 0
       });
+      setVersion(versionRes.data.version || 'unknown');
     } catch (error) {
       console.error('加载统计数据失败', error);
     } finally {
@@ -337,6 +340,10 @@ const Dashboard: React.FC = () => {
         <Col xs={24} md={12}>
           <Card title="系统信息" bordered={false}>
             <Space direction="vertical" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text>当前版本：</Text>
+                <Tag color="blue">{version || 'Loading...'}</Tag>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Text>技术栈：</Text>
                 <Space>

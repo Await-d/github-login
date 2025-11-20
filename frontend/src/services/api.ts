@@ -313,4 +313,15 @@ export const repositoryStarAPI = {
     api.post('/repository-star/batch-execute', data),
 };
 
+// 系统信息接口
+export const systemAPI = {
+  // 获取版本信息
+  getVersion: () =>
+    api.get('/version'),
+  
+  // 健康检查
+  healthCheck: () =>
+    api.get('/health'),
+};
+
 export default api;
