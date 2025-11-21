@@ -38,7 +38,8 @@ import {
   InfoCircleOutlined,
   CheckCircleOutlined,
   RocketOutlined,
-  MoreOutlined
+  MoreOutlined,
+  SearchOutlined
 } from '@ant-design/icons';
 import { repositoryStarAPI, githubAPI, githubGroupsAPI } from '../services/api';
 
@@ -130,6 +131,9 @@ const RepositoryStarManagement: React.FC = () => {
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // 搜索状态
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
     loadTasks();
@@ -708,6 +712,21 @@ const RepositoryStarManagement: React.FC = () => {
     }
   ];
 
+  // 搜索过滤函数
+  const getFilteredTasks = () => {
+    if (!searchText.trim()) {
+      return tasks;
+    }
+    
+    const searchLower = searchText.toLowerCase();
+    return tasks.filter(task => 
+      task.owner.toLowerCase().includes(searchLower) ||
+      task.repo_name.toLowerCase().includes(searchLower) ||
+      task.repository_url.toLowerCase().includes(searchLower) ||
+      (task.description && task.description.toLowerCase().includes(searchLower))
+    );
+  };
+
   // 移动端卡片视图渲染
   const renderMobileCard = (task: RepositoryStarTask) => {
     const percentage = task.total_accounts > 0 
@@ -996,6 +1015,15 @@ const RepositoryStarManagement: React.FC = () => {
         }
         extra={
           <Space wrap>
+            <Input
+              placeholder={isMobile ? "搜索仓库" : "搜索仓库名、owner或描述"}
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              style={{ width: isMobile ? 120 : 200 }}
+              size={isMobile ? 'small' : 'middle'}
+            />
             {selectedRowKeys.length > 0 && (
               <>
                 <Button
@@ -1060,7 +1088,7 @@ const RepositoryStarManagement: React.FC = () => {
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <ReloadOutlined spin style={{ fontSize: '24px' }} />
               </div>
-            ) : tasks.length === 0 ? (
+            ) : getFilteredTasks().length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#999' }}>
                 <StarOutlined style={{ fontSize: '48px', marginBottom: '16px' }} />
                 <div>暂无任务</div>
@@ -1069,14 +1097,14 @@ const RepositoryStarManagement: React.FC = () => {
                 </div>
               </div>
             ) : (
-              tasks.map(task => renderMobileCard(task))
+              getFilteredTasks().map(task => renderMobileCard(task))
             )}
           </div>
         ) : (
           // PC端：表格视图
           <Table
             columns={columns}
-            dataSource={tasks}
+            dataSource={getFilteredTasks()}
             rowKey="id"
             loading={loading}
             scroll={{ x: 'max-content' }}
@@ -1092,10 +1120,10 @@ const RepositoryStarManagement: React.FC = () => {
             pagination={{
               current: currentPage,
               pageSize: pageSize,
-              total: tasks.length,
+              total: getFilteredTasks().length,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务`,
+              showTotal: (total, range) => `显示 ${range[0]}-${range[1]} 条，共 ${total} 个任务${searchText.trim() ? ' (已过滤)' : ''}`,
               onChange: (page: number, size?: number) => {
                 setCurrentPage(page);
                 if (size !== undefined && size !== pageSize) {
