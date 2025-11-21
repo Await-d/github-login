@@ -220,17 +220,46 @@ const RepositoryStarManagement: React.FC = () => {
       const values = await addTaskForm.validateFields();
       setAddTaskLoading(true);
       
-      const response = await repositoryStarAPI.createTask({
-        repository_url: values.repository_url,
-        description: values.description,
-        github_account_ids: values.github_account_ids || [],
-        execute_immediately: values.execute_immediately || false
-      });
+      // 解析仓库URL列表
+      const urls = values.repository_url
+        .split('\n')
+        .map((url: string) => url.trim())
+        .filter((url: string) => url.length > 0);
       
-      if (response.data.success) {
-        message.success('任务创建成功');
-        setAddTaskVisible(false);
-        loadTasks();
+      if (urls.length === 0) {
+        message.warning('请输入至少一个仓库URL');
+        setAddTaskLoading(false);
+        return;
+      }
+      
+      // 判断是单个还是批量添加
+      if (urls.length === 1) {
+        // 单个添加
+        const response = await repositoryStarAPI.createTask({
+          repository_url: urls[0],
+          description: values.description,
+          github_account_ids: values.github_account_ids || [],
+          execute_immediately: values.execute_immediately || false
+        });
+        
+        if (response.data.success) {
+          message.success('任务创建成功');
+          setAddTaskVisible(false);
+          loadTasks();
+        }
+      } else {
+        // 批量添加
+        const response = await repositoryStarAPI.batchImport({
+          repository_urls: urls,
+          github_account_ids: values.github_account_ids || [],
+          execute_immediately: values.execute_immediately || false
+        });
+        
+        if (response.data.success) {
+          message.success(response.data.message || `成功添加${urls.length}个仓库任务`);
+          setAddTaskVisible(false);
+          loadTasks();
+        }
       }
     } catch (error: any) {
       if (error.response?.data?.detail) {
@@ -1091,13 +1120,18 @@ const RepositoryStarManagement: React.FC = () => {
         <Form form={addTaskForm} layout="vertical">
           <Form.Item
             name="repository_url"
-            label="仓库URL"
+            label="仓库URL（支持批量添加）"
             rules={[
-              { required: true, message: '请输入仓库URL' },
-              { pattern: /github\.com\/[^/]+\/[^/]+/, message: '请输入有效的GitHub仓库URL' }
+              { required: true, message: '请输入仓库URL' }
             ]}
+            extra="支持单行或多行输入。单行添加单个仓库，多行批量添加多个仓库"
           >
-            <Input placeholder="https://github.com/owner/repo" />
+            <TextArea 
+              rows={5}
+              maxLength={10000}
+              showCount
+              placeholder={"单个仓库示例：\nhttps://github.com/owner/repo\n\n批量添加示例（一行一个）：\nhttps://github.com/facebook/react\nhttps://github.com/vuejs/vue\nhttps://github.com/angular/angular"}
+            />
           </Form.Item>
           
           <Form.Item
