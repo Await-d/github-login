@@ -325,7 +325,7 @@ class BalanceExtractor:
         amount_pattern = re.compile(
             r'(?P<prefix_code>USD|CNY|EUR|GBP)?\s*'
             r'(?P<symbol>US\$|CN¥|[$¥€£￥＄])?\s*'
-            r'(?P<value>-?\d{1,3}(?:,\d{3})*(?:\.\d{1,4})?)\s*'
+            r'(?P<value>-?\d+(?:,\d{3})*(?:\.\d{1,4})?)\s*'
             r'(?P<suffix_code>USD|CNY|EUR|GBP)?',
             re.IGNORECASE
         )
